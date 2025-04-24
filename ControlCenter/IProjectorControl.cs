@@ -16,12 +16,14 @@ public enum ProjectorProtocolType
 
 public class ProjectorCommandResult
 {
+    string IpAddress { get; init; }
     public bool Success { get; init; }
     public string? Message { get; init; }
     public ProjectorStatusType? Status { get; init; }
     public string? RawResponse { get; init; }
 
     public static ProjectorCommandResult SuccessResult(
+        string ipAddress,
         string message,
         ProjectorStatusType? status = null,
         string? rawResponse = null)
@@ -34,6 +36,7 @@ public class ProjectorCommandResult
         };
 
     public static ProjectorCommandResult FailureResult(
+        string ipAddress,
         string message, 
         string? rawResponse = null)
         => new()
