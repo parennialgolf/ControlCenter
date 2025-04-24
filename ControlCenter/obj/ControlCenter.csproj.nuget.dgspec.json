@@ -1,26 +1,26 @@
 {
   "format": 1,
   "restore": {
-    "/home/user/ControlCenter/ControlCenter/ControlCenter.csproj": {}
+    "/Users/alex/Desktop/ControlCenter/ControlCenter/ControlCenter.csproj": {}
   },
   "projects": {
-    "/home/user/ControlCenter/ControlCenter/ControlCenter.csproj": {
+    "/Users/alex/Desktop/ControlCenter/ControlCenter/ControlCenter.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/user/ControlCenter/ControlCenter/ControlCenter.csproj",
+        "projectUniqueName": "/Users/alex/Desktop/ControlCenter/ControlCenter/ControlCenter.csproj",
         "projectName": "ControlCenter",
-        "projectPath": "/home/user/ControlCenter/ControlCenter/ControlCenter.csproj",
-        "packagesPath": "/home/user/.nuget/packages/",
-        "outputPath": "/home/user/ControlCenter/ControlCenter/obj/",
+        "projectPath": "/Users/alex/Desktop/ControlCenter/ControlCenter/ControlCenter.csproj",
+        "packagesPath": "/Users/alex/.nuget/packages/",
+        "outputPath": "/Users/alex/Desktop/ControlCenter/ControlCenter/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/home/user/.nuget/NuGet/NuGet.Config"
+          "/Users/alex/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
-          "/usr/lib/dotnet/library-packs": {},
+          "/usr/local/share/dotnet/library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -37,7 +37,7 @@
         "restoreAuditProperties": {
           "enableAudit": "true",
           "auditLevel": "low",
-          "auditMode": "direct"
+          "auditMode": "all"
         },
         "SdkAnalysisLevel": "9.0.100"
       },
@@ -77,7 +77,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/9.0.105/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.100/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

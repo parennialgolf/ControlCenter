@@ -25,11 +25,9 @@ public static class SerialRelayController
             var port = SerialPortPaths[boardIndex];
             try
             {
-                using var serialPort = new SerialPort(port, 9600, Parity.None, 8, StopBits.One)
-                {
-                    ReadTimeout = 1000,
-                    WriteTimeout = 1000
-                };
+                using var serialPort = new SerialPort(port, 9600, Parity.None, 8, StopBits.One);
+                serialPort.ReadTimeout = 1000;
+                serialPort.WriteTimeout = 1000;
 
                 serialPort.Open();
                 serialPort.DiscardInBuffer();
