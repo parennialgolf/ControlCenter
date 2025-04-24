@@ -62,3 +62,4 @@
 /Users/alex/Desktop/ControlCenter/ControlCenter/obj/Debug/net9.0/ControlCenter.pdb
 /Users/alex/Desktop/ControlCenter/ControlCenter/obj/Debug/net9.0/ControlCenter.genruntimeconfig.cache
 /Users/alex/Desktop/ControlCenter/ControlCenter/obj/Debug/net9.0/ref/ControlCenter.dll
+/Users/alex/Desktop/ControlCenter/ControlCenter/obj/Debug/net9.0/ControlCenter.sourcelink.json
