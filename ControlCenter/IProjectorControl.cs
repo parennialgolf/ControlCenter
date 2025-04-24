@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace ControlCenter.Services;
 
 public enum ProjectorStatusType
@@ -16,19 +18,20 @@ public enum ProjectorProtocolType
 
 public class ProjectorCommandResult
 {
-    public string IpAddress { get; init; } = string.Empty;
+    public IPAddress IpAddress { get; init; } = null!;
     public bool Success { get; init; }
     public string? Message { get; init; }
     public ProjectorStatusType? Status { get; init; }
     public string? RawResponse { get; init; }
 
     public static ProjectorCommandResult SuccessResult(
-        string ipAddress,
+        IPAddress ipAddress,
         string message,
         ProjectorStatusType? status = null,
         string? rawResponse = null)
         => new()
         {
+            IpAddress = ipAddress,
             Success = true,
             Message = message,
             Status = status,
@@ -36,11 +39,12 @@ public class ProjectorCommandResult
         };
 
     public static ProjectorCommandResult FailureResult(
-        string ipAddress,
+        IPAddress ipAddress,
         string message, 
         string? rawResponse = null)
         => new()
         {
+            IpAddress = ipAddress,
             Success = false,
             Message = message,
             RawResponse = rawResponse,

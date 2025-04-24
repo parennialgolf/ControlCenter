@@ -25,7 +25,7 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
 
         if (!result.WasSent)
             return ProjectorCommandResult.FailureResult(
-                ip.ToString(),
+                ip,
                 "Failed to send power ON command.",
                 result.Error ?? "Unknown error");
 
@@ -33,12 +33,12 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
 
         return confirmed
             ? ProjectorCommandResult.SuccessResult(
-                ip.ToString(),
+                ip,
                 "Power ON confirmed.",
                 ProjectorStatusType.On,
                 result.Response)
             : ProjectorCommandResult.FailureResult(
-                ip.ToString(),
+                ip,
                 "Power ON not confirmed by projector.",
                 result.Response);
     }
@@ -49,7 +49,7 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
 
         if (!result.WasSent)
             return ProjectorCommandResult.FailureResult(
-                ip.ToString(),
+                ip,
                 "Failed to send power OFF command.",
                 result.Error ?? "Unknown error");
 
@@ -57,12 +57,12 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
 
         return confirmed
             ? ProjectorCommandResult.SuccessResult(
-                ip.ToString(),
+                ip,
                 "Power OFF confirmed.",
                 ProjectorStatusType.Off,
                 result.Response)
             : ProjectorCommandResult.FailureResult(
-                ip.ToString(),
+                ip,
                 "Power OFF not confirmed by projector.",
                 result.Response);
     }
@@ -74,7 +74,7 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
 
         if (!result.WasSent || string.IsNullOrWhiteSpace(result.Response))
             return ProjectorCommandResult.FailureResult(
-                ip.ToString(),
+                ip,
                 "No response from projector.",
                 result.Error ?? "Unknown error");
 
@@ -86,7 +86,7 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
             _ => "Projector status unknown"
         };
 
-        return ProjectorCommandResult.SuccessResult(ip.ToString(), message, status, result.Response);
+        return ProjectorCommandResult.SuccessResult(ip, message, status, result.Response);
     }
 
 

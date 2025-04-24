@@ -1,10 +1,18 @@
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using ControlCenter.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Kestrel to use port 5021
 builder.WebHost.UseUrls("http://localhost:5021");
+
+// Configure JSON serialization options
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new IPAddressJsonConverter());
+});
 
 var app = builder.Build();
 
@@ -76,20 +84,54 @@ app.MapGet("/lockers/status", () =>
     });
 });
 
-app.MapPost("projectors/{projectorId:int}", async (int projectorId, ProjectorControlRequest request) =>
+app.MapPost("projectors/{projectorId:int}/on", async (int projectorId) =>
 {
-    var ipAddress = IPAddress.Parse(request.IpAddress);
+    var projectorData = ProjectorRegistry.Projectors.FirstOrDefault(p => p.Id == projectorId);
+    if (projectorData == null)
+    {
+        return Results.NotFound();
+    }
+
+    var ipAddress = IPAddress.Parse(projectorData.Ip);
     var projector = ProjectorControlFactory.Create(
         ipAddress,
-        request.Protocol);
+        projectorData.Protocol);
+    
+    var status = await projector.GetStatusAsync();
 
-    var result = request.Status switch
+    if (status.Status == ProjectorStatusType.On)
     {
-        ProjectorStatusType.On => await projector.OnAsync(),
-        ProjectorStatusType.Off => await projector.OffAsync(),
-        ProjectorStatusType.Failure => throw new NotImplementedException("Failure status not implemented"),
-        _ => throw new ArgumentOutOfRangeException(nameof(request.Status))
-    };
+        return Results.Ok(status);
+    }
+
+    var result = await projector.OnAsync();
+
+    return result.Success
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
+});
+
+app.MapPost("projectors/{projectorId:int}/off", async (int projectorId) =>
+{
+    var projectorData = ProjectorRegistry.Projectors.FirstOrDefault(p => p.Id == projectorId);
+    if (projectorData == null)
+    {
+        return Results.NotFound();
+    }
+
+    var ipAddress = IPAddress.Parse(projectorData.Ip);
+    var projector = ProjectorControlFactory.Create(
+        ipAddress,
+        projectorData.Protocol);
+
+    var status = await projector.GetStatusAsync();
+
+    if (status.Status == ProjectorStatusType.Off)
+    {
+        return Results.Ok(status);
+    }
+
+    var result = await projector.OffAsync();
 
     return result.Success
         ? Results.Ok(result)
@@ -108,7 +150,7 @@ app.MapGet("/projectors/status", async () =>
 
             return result;
         });
-    
+
     var statusResults = await Task.WhenAll(tasks);
 
     return Results.Ok(new
@@ -145,3 +187,18 @@ public record RegisteredProjector(
     string Name,
     string Ip,
     ProjectorProtocolType Protocol);
+
+// IPAddress JSON converter
+public class IPAddressJsonConverter : JsonConverter<IPAddress>
+{
+    public override IPAddress Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var ipString = reader.GetString();
+        return IPAddress.Parse(ipString!);
+    }
+
+    public override void Write(Utf8JsonWriter writer, IPAddress value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString());
+    }
+}
