@@ -1,0 +1,74 @@
+{
+  "status": {
+    "off": ":FE0100200000FF\\r\\n",
+    "on": ":FE0100000010F1\\r\\n"
+  },
+  "channel_1": {
+    "off": ":FE0500000000FD\\r\\n",
+    "on": ":FE050000FF00FE\\r\\n"
+  },
+  "channel_2": {
+    "off": ":FE0500010000FC\\r\\n",
+    "on": ":FE050001FF00FD\\r\\n"
+  },
+  "channel_3": {
+    "off": ":FE0500020000FB\\r\\n",
+    "on": ":FE050002FF00FC\\r\\n"
+  },
+  "channel_4": {
+    "off": ":FE0500030000FA\\r\\n",
+    "on": ":FE050003FF00FB\\r\\n"
+  },
+  "channel_5": {
+    "off": ":FE0500040000F9\\r\\n",
+    "on": ":FE050004FF00FA\\r\\n"
+  },
+  "channel_6": {
+    "off": ":FE0500050000F8\\r\\n",
+    "on": ":FE050005FF00F9\\r\\n"
+  },
+  "channel_7": {
+    "off": ":FE0500060000F7\\r\\n",
+    "on": ":FE050006FF00F8\\r\\n"
+  },
+  "channel_8": {
+    "off": ":FE0500070000F6\\r\\n",
+    "on": ":FE050007FF00F7\\r\\n"
+  },
+  "channel_9": {
+    "off": ":FE0500080000F5\\r\\n",
+    "on": ":FE050008FF00F6\\r\\n"
+  },
+  "channel_10": {
+    "off": ":FE0500090000F4\\r\\n",
+    "on": ":FE050009FF00F5\\r\\n"
+  },
+  "channel_11": {
+    "off": ":FE05000A0000F3\\r\\n",
+    "on": ":FE05000AFF00F4\\r\\n"
+  },
+  "channel_12": {
+    "off": ":FE05000B0000F2\\r\\n",
+    "on": ":FE05000BFF00F3\\r\\n"
+  },
+  "channel_13": {
+    "off": ":FE05000C0000F1\\r\\n",
+    "on": ":FE05000CFF00F2\\r\\n"
+  },
+  "channel_14": {
+    "off": ":FE05000D0000F0\\r\\n",
+    "on": ":FE05000DFF00F1\\r\\n"
+  },
+  "channel_15": {
+    "off": ":FE05000E0000FF\\r\\n",
+    "on": ":FE05000EFF00F0\\r\\n"
+  },
+  "channel_16": {
+    "off": ":FE05000F0000FE\\r\\n",
+    "on": ":FE05000FFF00FF\\r\\n"
+  },
+  "all_channels": {
+    "off": ":FE0F00000010020000E11\\r\\n",
+    "on": ":FE0F0000001002FFFFE3\\r\\n"
+  }
+}
