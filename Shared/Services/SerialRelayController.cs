@@ -82,11 +82,9 @@ public static class SerialRelayController
             try
             {
                 var command = SerialRelayCommands.GetCommand(channel);
-                using var serialPort = new SerialPort(portPath, 9600)
-                {
-                    ReadTimeout = 1000,
-                    WriteTimeout = 1000
-                };
+                using var serialPort = new SerialPort(portPath, 9600);
+                serialPort.ReadTimeout = 1000;
+                serialPort.WriteTimeout = 1000;
 
                 serialPort.Open();
                 serialPort.DiscardInBuffer();
