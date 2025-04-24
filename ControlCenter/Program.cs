@@ -4,7 +4,7 @@ using ControlCenter.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Kestrel to use port 5021
-builder.WebHost.UseUrls("http://localhost:5022");
+builder.WebHost.UseUrls("http://localhost:5021");
 
 var app = builder.Build();
 

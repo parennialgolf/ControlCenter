@@ -24,7 +24,9 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
         var result = await SendCommandAsync(protocol.On, expectResponse: true);
 
         if (!result.WasSent)
-            return ProjectorCommandResult.FailureResult("Failed to send power ON command.",
+            return ProjectorCommandResult.FailureResult(
+                ip.ToString(),
+                "Failed to send power ON command.",
                 result.Error ?? "Unknown error");
 
         var confirmed = protocol.ParseStatus(result.Response ?? "") == ProjectorStatusType.On;
@@ -46,7 +48,9 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
         var result = await SendCommandAsync(protocol.Off, expectResponse: true);
 
         if (!result.WasSent)
-            return ProjectorCommandResult.FailureResult("Failed to send power OFF command.",
+            return ProjectorCommandResult.FailureResult(
+                ip.ToString(),
+                "Failed to send power OFF command.",
                 result.Error ?? "Unknown error");
 
         var confirmed = protocol.ParseStatus(result.Response ?? "") == ProjectorStatusType.Off;
@@ -69,7 +73,10 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
         var result = await SendCommandAsync(protocol.Status, expectResponse: true);
 
         if (!result.WasSent || string.IsNullOrWhiteSpace(result.Response))
-            return ProjectorCommandResult.FailureResult("No response from projector.", result.Error ?? "Unknown error");
+            return ProjectorCommandResult.FailureResult(
+                ip.ToString(),
+                "No response from projector.",
+                result.Error ?? "Unknown error");
 
         var status = protocol.ParseStatus(result.Response);
         var message = status switch

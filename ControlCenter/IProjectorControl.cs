@@ -16,7 +16,7 @@ public enum ProjectorProtocolType
 
 public class ProjectorCommandResult
 {
-    string IpAddress { get; init; }
+    public string IpAddress { get; init; } = string.Empty;
     public bool Success { get; init; }
     public string? Message { get; init; }
     public ProjectorStatusType? Status { get; init; }
