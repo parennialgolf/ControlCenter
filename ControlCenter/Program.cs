@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ControlCenter.Services;
+using Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,9 +59,14 @@ app.MapGet("/doors/status", async () =>
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber) =>
     {
         var relay = SerialRelayController.GetRelay(lockerNumber);
-
-        // Send command (just mocked here)
-        var result = await SerialRelayController.SendToSerialWithConfirmation(relay.SerialPort, relay.Channel);
+        
+        // curl -X POST http://10.1.10.150:5000/unlock \
+        // -H "Content-Type: application/json" \
+        // -d '{"locker_number": 10}'
+        
+        // var result = await HttpClient
+        
+        // var result = await SerialRelayController.SendToSerialWithConfirmation(relay.SerialPort, relay.Channel);
 
         return result.Success
             ? Results.Ok(result)

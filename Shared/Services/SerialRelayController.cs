@@ -1,6 +1,6 @@
 using System.IO.Ports;
 
-namespace ControlCenter.Services;
+namespace Shared.Services;
 
 public static class SerialRelayController
 {

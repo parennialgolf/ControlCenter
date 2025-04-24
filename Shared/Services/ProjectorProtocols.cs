@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace ControlCenter.Services;
+namespace Shared.Services;
 
 public static class ProjectorControlFactory
 {

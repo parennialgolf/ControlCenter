@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-namespace ControlCenter.Services;
+namespace Shared.Services;
 
 public class ProjectorTransmissionResult(bool wasSent, string? response, string? error)
 {

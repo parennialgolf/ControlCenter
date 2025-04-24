@@ -1,7 +1,7 @@
 using System.Net.Sockets;
 using System.Text;
 
-namespace ControlCenter.Services;
+namespace Shared.Services;
 
 public static class IpRelayController
 {

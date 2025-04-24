@@ -1,6 +1,4 @@
-using ControlCenter.Services;
-
-namespace ControlCenter;
+namespace Shared;
 
 public interface IProjectorProtocol
 {

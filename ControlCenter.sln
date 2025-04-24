@@ -2,6 +2,10 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlCenter", "ControlCenter\ControlCenter.csproj", "{6C8F9AFF-69EC-4A36-BDDF-58DAD8B91794}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialRelayController", "SerialRelayController\SerialRelayController.csproj", "{7DCFD2CD-B860-4718-B2C1-118509FA2B33}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "Shared\Shared.csproj", "{7D66A255-93D9-4987-8622-AB458C823109}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +16,13 @@ Global
 		{6C8F9AFF-69EC-4A36-BDDF-58DAD8B91794}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6C8F9AFF-69EC-4A36-BDDF-58DAD8B91794}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6C8F9AFF-69EC-4A36-BDDF-58DAD8B91794}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7DCFD2CD-B860-4718-B2C1-118509FA2B33}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7DCFD2CD-B860-4718-B2C1-118509FA2B33}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7DCFD2CD-B860-4718-B2C1-118509FA2B33}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7DCFD2CD-B860-4718-B2C1-118509FA2B33}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D66A255-93D9-4987-8622-AB458C823109}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D66A255-93D9-4987-8622-AB458C823109}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D66A255-93D9-4987-8622-AB458C823109}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D66A255-93D9-4987-8622-AB458C823109}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

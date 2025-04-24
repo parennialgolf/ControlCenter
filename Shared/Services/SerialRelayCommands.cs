@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace ControlCenter.Services;
+namespace Shared.Services;
 
 public static class SerialRelayCommands
 {

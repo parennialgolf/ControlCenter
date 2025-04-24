@@ -9,20 +9,12 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" />
-        <PackageReference Include="System.IO.Ports" Version="9.0.4" />
     </ItemGroup>
 
     <ItemGroup>
       <Content Include="..\.dockerignore">
         <Link>.dockerignore</Link>
       </Content>
-    </ItemGroup>
-
-    <ItemGroup>
-      <Reference Include="System.IO.Ports">
-        <HintPath>bin\Debug\net9.0\runtimes\unix\lib\net9.0\System.IO.Ports.dll</HintPath>
-      </Reference>
     </ItemGroup>
 
     <ItemGroup>
