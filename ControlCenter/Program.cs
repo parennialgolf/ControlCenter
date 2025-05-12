@@ -67,46 +67,53 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber, HttpC
         // -H "Content-Type: application/json" \
         // -d '{"locker_number": 10}'
 
-        var response = await httpClient.PostAsync("http://pg-pi.local:5000/unlock",
-            new StringContent(JsonSerializer.Serialize(new { locker_number = lockerNumber })));
+        var response = await httpClient.PostAsync("http://10.1.10.150:5000/unlock",
+            new StringContent(
+                JsonSerializer.Serialize(new { locker_number = lockerNumber }),
+                Encoding.UTF8,
+                "application/json"));
 
         if (!response.IsSuccessStatusCode)
         {
             return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
         }
 
-        var result = JsonSerializer.Deserialize<SerialCommandResult>(await response.Content.ReadAsStringAsync());
+        // var result = JsonSerializer.Deserialize<SerialCommandResult>(await response.Content.ReadAsStringAsync());
 
-        return result!.Success
-            ? Results.Ok(result)
-            : Results.BadRequest(result);
+        var result = JsonSerializer.Deserialize<LockerPassthroughResult>(await response.Content.ReadAsStringAsync());
+
+        // return result!.Success
+        //     ? Results.Ok(result)
+        //     : Results.BadRequest(result);
+
+        return Results.Ok(result);
     })
     .WithName("UnlockLocker");
 
-app.MapGet("/lockers/status", async (int lockerNumber, HttpClient httpClient) =>
-{
-    var forwardUrl = $"http://10.1.10.150:5020/lockers/{lockerNumber}/unlock";
+// app.MapGet("/lockers/status", async (int lockerNumber, HttpClient httpClient) =>
+// {
+//     var forwardUrl = $"http://10.1.10.150:5020/lockers/{lockerNumber}/unlock";
 
-    var payload = new
-    {
-        locker_number = lockerNumber
-    };
+//     var payload = new
+//     {
+//         locker_number = lockerNumber
+//     };
 
-    var content = new StringContent(
-        JsonSerializer.Serialize(payload),
-        Encoding.UTF8,
-        "application/json"
-    );
+//     var content = new StringContent(
+//         JsonSerializer.Serialize(payload),
+//         Encoding.UTF8,
+//         "application/json"
+//     );
 
-    var response = await httpClient.PostAsync(forwardUrl, content);
-    var body = await response.Content.ReadAsStringAsync();
+//     var response = await httpClient.PostAsync(forwardUrl, content);
+//     var body = await response.Content.ReadAsStringAsync();
 
-    var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
+//     var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
 
-    return response.IsSuccessStatusCode
-        ? Results.Ok(result)
-        : Results.BadRequest(result);
-});
+//     return response.IsSuccessStatusCode
+//         ? Results.Ok(result)
+//         : Results.BadRequest(result);
+// });
 
 
 app.MapPost("projectors/{projectorId:int}/on", async (int projectorId) =>
@@ -227,3 +234,9 @@ public class IPAddressJsonConverter : JsonConverter<IPAddress>
         writer.WriteStringValue(value.ToString());
     }
 }
+
+public record LockerPassthroughResult
+{
+    [JsonPropertyName("message")]
+    public string Message { get; set; } = string.Empty;
+};
