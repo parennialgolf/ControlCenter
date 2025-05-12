@@ -12,7 +12,7 @@ app.UseHttpsRedirection();
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber) =>
     {
         var relay = SerialRelayController.GetRelay(lockerNumber);
-        
+
         var result = await SerialRelayController.SendToSerialWithConfirmation(relay.SerialPort, relay.Channel);
 
         return result.Success
@@ -25,15 +25,14 @@ app.MapGet("/lockers/status", () =>
 {
     var statuses = SerialRelayController.GetAllStatuses();
 
-    return Results.Ok(new
-    {
-        success = true,
-        lockers = statuses.Select(s => new
-        {
+    return Results.Ok(new LockerStatusResponse(
+        true,
+        [.. statuses.Select(s => new LockerStatusResult(
             s.LockerNumber,
-            status = s.IsOn ? "UNLOCKED" : "LOCKED"
-        })
-    });
+            s.IsOn
+            ? LockerStatus.Unlocked
+            : LockerStatus.Locked))]
+    ));
 });
 
 await app.RunAsync();
