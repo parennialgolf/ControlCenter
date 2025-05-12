@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Shared;
 using Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -56,19 +57,24 @@ app.MapGet("/doors/status", async () =>
 });
 
 
-app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber) =>
+app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber, HttpClient httpClient) =>
     {
         var relay = SerialRelayController.GetRelay(lockerNumber);
-        
+
         // curl -X POST http://10.1.10.150:5000/unlock \
         // -H "Content-Type: application/json" \
         // -d '{"locker_number": 10}'
-        
-        // var result = await HttpClient
-        
-        // var result = await SerialRelayController.SendToSerialWithConfirmation(relay.SerialPort, relay.Channel);
 
-        return result.Success
+        var response = await httpClient.PostAsync("http://pg-pi.local:5000/unlock", new StringContent(JsonSerializer.Serialize(new { locker_number = lockerNumber })));
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
+        }
+
+        var result = JsonSerializer.Deserialize<SerialCommandResult>(await response.Content.ReadAsStringAsync());
+
+        return result!.Success
             ? Results.Ok(result)
             : Results.BadRequest(result);
     })
@@ -101,7 +107,7 @@ app.MapPost("projectors/{projectorId:int}/on", async (int projectorId) =>
     var projector = ProjectorControlFactory.Create(
         ipAddress,
         projectorData.Protocol);
-    
+
     var status = await projector.GetStatusAsync();
 
     if (status.Status == ProjectorStatusType.On)
