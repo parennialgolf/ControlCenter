@@ -26,7 +26,7 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 
 app.MapPost("/doors/{doorNumber:int}/unlock", async (int doorNumber) =>
 {

@@ -8,6 +8,8 @@
 *.sln.docstates
 *.userprefs
 
+*/publish
+
 ## Build results
 [Dd]ebug/
 [Dd]ebugPublic/
