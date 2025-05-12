@@ -7,14 +7,7 @@ builder.WebHost.UseUrls("http://localhost:5001");
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
-}
-
 app.UseHttpsRedirection();
-
 
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber) =>
     {

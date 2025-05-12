@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Shared;
@@ -8,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Configure Kestrel to use port 5021
 builder.WebHost.UseUrls("http://localhost:5021");
+
+builder.Services.AddHttpClient();
 
 // Configure JSON serialization options
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -59,13 +62,13 @@ app.MapGet("/doors/status", async () =>
 
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber, HttpClient httpClient) =>
     {
-        var relay = SerialRelayController.GetRelay(lockerNumber);
 
         // curl -X POST http://10.1.10.150:5000/unlock \
         // -H "Content-Type: application/json" \
         // -d '{"locker_number": 10}'
 
-        var response = await httpClient.PostAsync("http://pg-pi.local:5000/unlock", new StringContent(JsonSerializer.Serialize(new { locker_number = lockerNumber })));
+        var response = await httpClient.PostAsync("http://pg-pi.local:5000/unlock",
+            new StringContent(JsonSerializer.Serialize(new { locker_number = lockerNumber })));
 
         if (!response.IsSuccessStatusCode)
         {
@@ -80,20 +83,31 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber, HttpC
     })
     .WithName("UnlockLocker");
 
-app.MapGet("/lockers/status", () =>
+app.MapGet("/lockers/status", async (int lockerNumber, HttpClient httpClient) =>
 {
-    var statuses = SerialRelayController.GetAllStatuses();
+    var forwardUrl = $"http://10.1.10.150:5020/lockers/{lockerNumber}/unlock";
 
-    return Results.Ok(new
+    var payload = new
     {
-        success = true,
-        lockers = statuses.Select(s => new
-        {
-            s.LockerNumber,
-            status = s.IsOn ? "UNLOCKED" : "LOCKED"
-        })
-    });
+        locker_number = lockerNumber
+    };
+
+    var content = new StringContent(
+        JsonSerializer.Serialize(payload),
+        Encoding.UTF8,
+        "application/json"
+    );
+
+    var response = await httpClient.PostAsync(forwardUrl, content);
+    var body = await response.Content.ReadAsStringAsync();
+
+    var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
+
+    return response.IsSuccessStatusCode
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
 });
+
 
 app.MapPost("projectors/{projectorId:int}/on", async (int projectorId) =>
 {

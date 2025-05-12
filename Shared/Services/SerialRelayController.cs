@@ -1,4 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.IO.Ports;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Shared.Services;
 
@@ -20,11 +24,12 @@ public static class SerialRelayController
     {
         var results = new List<LockerRelayStatus>();
 
-        for (int boardIndex = 0; boardIndex < SerialPortPaths.Count; boardIndex++)
+        for (var boardIndex = 0; boardIndex < SerialPortPaths.Count; boardIndex++)
         {
             var port = SerialPortPaths[boardIndex];
             try
             {
+#pragma warning disable CA1416
                 using var serialPort = new SerialPort(port, 9600, Parity.None, 8, StopBits.One);
                 serialPort.ReadTimeout = 1000;
                 serialPort.WriteTimeout = 1000;
@@ -34,7 +39,9 @@ public static class SerialRelayController
                 serialPort.DiscardOutBuffer();
 
                 serialPort.Write("00");
+
                 var response = serialPort.ReadLine()?.TrimStart(':').Trim();
+#pragma warning restore CA1416
 
                 if (string.IsNullOrWhiteSpace(response) || response.Length < 10)
                     continue;
@@ -44,12 +51,12 @@ public static class SerialRelayController
                 bytes[0] = Convert.ToByte(hexBitfield.Substring(0, 2), 16);
                 bytes[1] = Convert.ToByte(hexBitfield.Substring(2, 2), 16);
 
-                for (int i = 0; i < ChannelsPerBoard; i++)
+                for (var i = 0; i < ChannelsPerBoard; i++)
                 {
-                    int lockerNumber = boardIndex * ChannelsPerBoard + i + 1;
-                    int byteIndex = i / 8;
-                    int bitIndex = i % 8;
-                    bool isOn = (bytes[byteIndex] & (1 << bitIndex)) != 0;
+                    var lockerNumber = boardIndex * ChannelsPerBoard + i + 1;
+                    var byteIndex = i / 8;
+                    var bitIndex = i % 8;
+                    var isOn = (bytes[byteIndex] & (1 << bitIndex)) != 0;
 
                     results.Add(new LockerRelayStatus(lockerNumber, isOn));
                 }
@@ -77,44 +84,47 @@ public static class SerialRelayController
 
     public static async Task<SerialCommandResult> SendToSerialWithConfirmation(string portPath, int channel)
     {
-        return await Task.Run(() =>
+        try
         {
-            try
-            {
-                var command = SerialRelayCommands.GetCommand(channel);
-                using var serialPort = new SerialPort(portPath, 9600);
-                serialPort.ReadTimeout = 1000;
-                serialPort.WriteTimeout = 1000;
+#pragma warning disable CA1416
+            var command = SerialRelayCommands.GetCommand(channel);
+            using var serialPort = new SerialPort(portPath, 9600);
+            serialPort.ReadTimeout = 1000;
+            serialPort.WriteTimeout = 1000;
 
-                serialPort.Open();
-                serialPort.DiscardInBuffer();
-                serialPort.DiscardOutBuffer();
+            serialPort.Open();
+            serialPort.DiscardInBuffer();
+            serialPort.DiscardOutBuffer();
 
-                serialPort.Write(command!.On);
-                Thread.Sleep(5000);
+            serialPort.Write(command!.On);
+            Thread.Sleep(5000);
 
-                serialPort.DiscardInBuffer();
-                serialPort.Write(SerialRelayCommands.Status.On);
+            serialPort.DiscardInBuffer();
+            serialPort.Write(SerialRelayCommands.Status.On);
 
-                var response = serialPort.ReadLine();
-                var success = IsRelayOn(response, channel);
+            var response = serialPort.ReadLine();
+            var success = IsRelayOn(response, channel);
 
-                return new SerialCommandResult(success, StatusResponse: response);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return new SerialCommandResult(false,
-                    Error: $"Permission denied to open {portPath}. Is the relay connected and accessible?");
-            }
-            catch (TimeoutException)
-            {
-                return new SerialCommandResult(false, Error: "Relay timed out waiting for status response.");
-            }
-            catch (Exception ex)
-            {
-                return new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}");
-            }
-        });
+            return new SerialCommandResult(success, StatusResponse: response);
+#pragma warning restore CA1416
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new SerialCommandResult(false,
+                Error: $"Permission denied to open {portPath}. Is the relay connected and accessible?");
+        }
+        catch (TimeoutException)
+        {
+            return new SerialCommandResult(false, Error: "Relay timed out waiting for status response.");
+        }
+        catch (Exception ex)
+        {
+            return new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}");
+        }
+        finally
+        {
+            await Task.CompletedTask;
+        }
     }
 
     private static bool IsRelayOn(string? response, int relayChannel)
@@ -128,7 +138,7 @@ public static class SerialRelayController
 
         var hexBitfield = response.Substring(6, 4);
         var bytes = new byte[2];
-        bytes[0] = Convert.ToByte(hexBitfield.Substring(0, 2), 16);
+        bytes[0] = Convert.ToByte(hexBitfield[..2], 16);
         bytes[1] = Convert.ToByte(hexBitfield.Substring(2, 2), 16);
 
         var channelIndex = relayChannel - 1;
