@@ -2,71 +2,75 @@
 set -euo pipefail
 
 # ────────── CONFIG ──────────
-DOTNET_CHANNEL="LTS"                  # fallback path
-DOTNET_INSTALL_DIR="/usr/share/dotnet"
+DOTNET_CHANNEL="9.0"
+DOTNET_INSTALL_DIR="/opt/dotnet"
+SYSTEMD_DIR="/etc/systemd/system"
 
 PROJECT_DIR="$(pwd)"
 PUBLISH_DIR="$PROJECT_DIR/publish"
-SERVICE_FILE="$PROJECT_DIR/scripts/serialrelaycontroller.service"
+SERVICE_TEMPLATE="$PROJECT_DIR/scripts/serialrelaycontroller.service"
+SERVICE_FILE="$SYSTEMD_DIR/serialrelaycontroller.service"
 SERVICE_NAME="serialrelaycontroller.service"
-SYSTEMD_DIR="/etc/systemd/system"
 
-install_dotnet_for_ubuntu_24_04() {
-    echo "Adding dotnet/backports PPA and installing dotnet‑sdk‑9.0…"
-    sudo add-apt-repository -y ppa:dotnet/backports
-    sudo apt-get update
-    sudo apt-get install -y dotnet-sdk-9.0
-}
+CURRENT_USER=$(whoami)
+ARCH=$(uname -m)
 
-install_dotnet_portable() {
-    echo "Installing .NET via dotnet-install.sh (channel=$DOTNET_CHANNEL)…"
+# ────────── DETECT RUNTIME ──────────
+if [[ "$ARCH" == "x86_64" ]]; then
+    RUNTIME="linux-x64"
+elif [[ "$ARCH" == "aarch64" ]]; then
+    RUNTIME="linux-arm64"
+elif [[ "$ARCH" == "armv7l" ]]; then
+    RUNTIME="linux-arm"
+else
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+fi
+
+echo "Detected architecture: $ARCH → runtime: $RUNTIME"
+
+# ────────── INSTALL DOTNET IF MISSING ──────────
+if ! command -v dotnet &>/dev/null; then
+    echo "dotnet not found — installing to $DOTNET_INSTALL_DIR"
+
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
+
     sudo bash "$TMP_SCRIPT" \
         --channel "$DOTNET_CHANNEL" \
         --install-dir "$DOTNET_INSTALL_DIR" \
         --quality ga
-    rm -f "$TMP_SCRIPT"
-    export PATH="$PATH:$DOTNET_INSTALL_DIR"
-    if ! grep -q "$DOTNET_INSTALL_DIR" /etc/profile &>/dev/null; then
-        echo "export PATH=\"\$PATH:$DOTNET_INSTALL_DIR\"" \
-            | sudo tee /etc/profile.d/dotnet.sh >/dev/null
-    fi
-}
 
-# ────────── ENSURE SDK ──────────
-if ! command -v dotnet >/dev/null 2>&1; then
-    echo "dotnet SDK not found – determining best install method…"
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        # Ubuntu 24.04 (noble) preferred path
-        if [[ "$ID" == "ubuntu" && "$VERSION_ID" == "24.04" ]]; then
-            install_dotnet_for_ubuntu_24_04
-        else
-            install_dotnet_portable
-        fi
-    else
-        install_dotnet_portable
+    rm -f "$TMP_SCRIPT"
+
+    # Symlink for convenience
+    if [[ ! -L /usr/bin/dotnet ]]; then
+        sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/bin/dotnet
     fi
-    echo "dotnet SDK installed: $(dotnet --version)"
+
+    echo "dotnet installed: $(dotnet --version)"
 else
     echo "dotnet SDK detected: $(dotnet --version)"
 fi
 
+# ────────── BUILD & PUBLISH ──────────
 echo ""
 echo "====================================="
-echo "Publishing ControlCenter to $PUBLISH_DIR"
+echo "Publishing SerialRelayController to $PUBLISH_DIR"
 echo "====================================="
 
-dotnet publish -c Release -r linux-x64 --self-contained false -o "$PUBLISH_DIR"
+dotnet publish -c Release -r $RUNTIME --self-contained false -o "$PUBLISH_DIR"
 
+# ────────── DEPLOY SYSTEMD SERVICE FILE ──────────
 echo ""
 echo "====================================="
-echo "Deploying service file to $SYSTEMD_DIR"
+echo "Deploying service file to $SERVICE_FILE"
 echo "====================================="
 
-sudo cp "$SERVICE_FILE" "$SYSTEMD_DIR/$SERVICE_NAME"
+# Replace {{USER}} and {{PROJECT_DIR}} in service template
+sed "s|{{USER}}|$CURRENT_USER|g; s|{{PROJECT_DIR}}|$PROJECT_DIR|g" "$SERVICE_TEMPLATE" | sudo tee "$SERVICE_FILE" > /dev/null
 
+# ────────── RELOAD SYSTEMD & START SERVICE ──────────
 echo ""
 echo "====================================="
 echo "Reloading systemd, enabling & restarting $SERVICE_NAME"
@@ -76,6 +80,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
 
+# ────────── STATUS & LOGS ──────────
 echo ""
 echo "====================================="
 echo "Status of $SERVICE_NAME"
