@@ -1,13 +1,5 @@
 ## 🚀 Deploying ControlCenter Service
 
-### Deployment Steps:
-| Step | Command |
-|-------|---------|
-| Place `deploy.sh` in repo root or `/scripts/` | ✅ |
-| `chmod +x deploy.sh` before commit | ✅ |
-| `git add deploy.sh && git commit` | ✅ |
-| On any server: `chmod +x deploy.sh && ./deploy.sh` | ✅ |
-
 ### What `deploy.sh` does:
 - Publishes the .NET project to `/publish`
 - Copies `controlcenter.service` to `/etc/systemd/system/`
@@ -19,5 +11,6 @@
 
 ### To deploy:
 ```bash
+cd ControlCenter/ControlCenter
 chmod +x scripts/deploy.sh
 ./scripts/deploy.sh

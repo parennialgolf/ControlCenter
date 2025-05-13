@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PROJECT_DIR="$(pwd)/ControlCenter/ControlCenter"
+PROJECT_DIR="$(pwd)"
 PUBLISH_DIR="$PROJECT_DIR/publish"
 SERVICE_FILE="$(pwd)/scripts/controlcenter.service"
 SERVICE_NAME="controlcenter.service"
