@@ -1,0 +1,23 @@
+[Unit]
+Description=SerialRelayController .NET Service
+After=network.target
+
+[Service]
+# Update these paths if you change project location
+WorkingDirectory=/home/user/SerialRelayController/SerialRelayController/publish
+ExecStart=/usr/bin/dotnet /home/user/SerialRelayController/SerialRelayController/publish/SerialRelayController.dll
+
+# Always restart on crash
+Restart=always
+RestartSec=5
+
+# Run as 'user' (change this if needed)
+User=user
+
+# Environment variables for runtime config
+Environment=SERIAL_RELAY_CONTROLLER_PORT=5001
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
+
+[Install]
+WantedBy=multi-user.target
