@@ -1,0 +1,26 @@
+[Unit]
+Description=ControlCenter .NET Service
+After=network.target
+
+[Service]
+# Update these paths if you change project location
+WorkingDirectory=/home/user/ControlCenter/ControlCenter/publish
+ExecStart=/usr/bin/dotnet /home/user/ControlCenter/ControlCenter/publish/ControlCenter.dll
+
+# Always restart on crash
+Restart=always
+RestartSec=5
+
+# Run as 'user' (change this if needed)
+User=user
+
+# Environment variables for runtime config
+Environment=CONTROL_CENTER_PORT=5021
+Environment=SERIAL_RELAY_CONTROLLER_HOST=10.1.10.150
+Environment=SERIAL_RELAY_CONTROLLER_PORT=5000
+Environment=USE_LEGACY_LOCKER_API=false
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
+
+[Install]
+WantedBy=multi-user.target

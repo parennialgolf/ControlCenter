@@ -8,7 +8,7 @@ using Shared.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Kestrel to use port 5021
-builder.WebHost.UseUrls("http://localhost:5021");
+builder.WebHost.UseUrls($"http://localhost:{builder.Configuration.GetValue<int>("CONTROL_CENTER_PORT")}");
 
 builder.Services.AddHttpClient();
 
@@ -60,60 +60,79 @@ app.MapGet("/doors/status", async () =>
 });
 
 
-app.MapPost("/lockers/{lockerNumber:int}/unlock", async (int lockerNumber, HttpClient httpClient) =>
+app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
+    int lockerNumber,
+    HttpClient httpClient,
+    IConfiguration config,
+    ILogger<Program> logger) =>
     {
+        if (config.GetValue<bool>("USE_LEGACY_LOCKER_API"))
+        {
+            // curl -X POST http://10.1.10.150:5000/unlock \
+            // -H "Content-Type: application/json" \
+            // -d '{"locker_number": 10}'
 
-        // curl -X POST http://10.1.10.150:5000/unlock \
-        // -H "Content-Type: application/json" \
-        // -d '{"locker_number": 10}'
+            logger.LogInformation("Unlocking locker {LockerNumber} using legacy API", lockerNumber);
 
-        var response = await httpClient.PostAsync("http://10.1.10.150:5000/unlock",
-            new StringContent(
-                JsonSerializer.Serialize(new { locker_number = lockerNumber }),
-                Encoding.UTF8,
-                "application/json"));
+            var response = await httpClient.PostAsync(
+                $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/unlock",
+                new StringContent(
+                    JsonSerializer.Serialize(new { locker_number = lockerNumber }),
+                    Encoding.UTF8,
+                    "application/json"));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
+            }
+
+            var result = JsonSerializer.Deserialize<LockerPassthroughResult>(await response.Content.ReadAsStringAsync());
+
+            return Results.Ok(result);
+        }
+        else
+        {
+            var forwardUrl = $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/{lockerNumber}/unlock";
+
+            var response = await httpClient.PostAsync(forwardUrl, null);
+            var body = await response.Content.ReadAsStringAsync();
+
+            var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
+
+            return response.IsSuccessStatusCode
+                        ? Results.Ok(result)
+                    : Results.BadRequest(result);
+        }
+    })
+    .WithName("UnlockLocker");
+
+app.MapGet("/lockers/status", async (
+    int lockerNumber,
+    HttpClient httpClient,
+    IConfiguration config) =>
+{
+    if (config.GetValue<bool>("USE_LEGACY_LOCKER_API"))
+    {
+        return Results.StatusCode(StatusCodes.Status501NotImplemented);
+    }
+    else
+    {
+        var forwardUrl = $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/status";
+
+        var response = await httpClient.GetAsync(forwardUrl);
 
         if (!response.IsSuccessStatusCode)
         {
             return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
         }
 
-        // var result = JsonSerializer.Deserialize<SerialCommandResult>(await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadAsStringAsync();
 
-        var result = JsonSerializer.Deserialize<LockerPassthroughResult>(await response.Content.ReadAsStringAsync());
-
-        // return result!.Success
-        //     ? Results.Ok(result)
-        //     : Results.BadRequest(result);
+        var result = JsonSerializer.Deserialize<LockerStatusResponse>(body);
 
         return Results.Ok(result);
-    })
-    .WithName("UnlockLocker");
-
-// app.MapGet("/lockers/status", async (int lockerNumber, HttpClient httpClient) =>
-// {
-//     var forwardUrl = $"http://10.1.10.150:5020/lockers/{lockerNumber}/unlock";
-
-//     var payload = new
-//     {
-//         locker_number = lockerNumber
-//     };
-
-//     var content = new StringContent(
-//         JsonSerializer.Serialize(payload),
-//         Encoding.UTF8,
-//         "application/json"
-//     );
-
-//     var response = await httpClient.PostAsync(forwardUrl, content);
-//     var body = await response.Content.ReadAsStringAsync();
-
-//     var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
-
-//     return response.IsSuccessStatusCode
-//         ? Results.Ok(result)
-//         : Results.BadRequest(result);
-// });
+    }
+});
 
 
 app.MapPost("projectors/{projectorId:int}/on", async (int projectorId) =>
