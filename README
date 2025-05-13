@@ -13,4 +13,4 @@
 ```bash
 cd ControlCenter/ControlCenter
 chmod +x scripts/deploy.sh
-./scripts/deploy.sh
+run ./scripts/deploy.sh
