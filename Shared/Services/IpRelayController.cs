@@ -1,14 +1,56 @@
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
 namespace Shared.Services;
 
+public static class ControlByWebRelayCommands
+{
+    public static Uri On(IPAddress ip) =>
+        new($"http://admin:webrelay@{ip}/state.xml?relay1State=1");
+
+    public static Uri Off(IPAddress ip) =>
+        new($"http://admin:webrelay@{ip}/state.xml?relay1State=0");
+
+    public static Uri Pulse(IPAddress ip) =>
+        new($"http://admin:webrelay@{ip}/state.xml?relay1State=2");
+
+    public static Uri Status(IPAddress ip) =>
+        new($"http://admin:webrelay@{ip}/state.json");
+}
+
+
+// "doors": {
+//     "managed": true,
+//     "max": 1,
+//     "relays": [
+//     {
+//         "id": 1,
+//         "host": "192.168.7.200"
+//     }
+//     ]
+// },
+public class Doors
+{
+    public bool Managed { get; set; }
+    public int Max { get; set; }
+    public List<DoorRelayConfig> Relays { get; set; } = [];
+}
+
+public class DoorRelayConfig
+{
+    public int Id { get; set; }
+    public IPAddress IpAddress { get; set; }
+
+    public DoorRelayConfig(int id, IPAddress ipAddress)
+    {
+        Id = id;
+        IpAddress = ipAddress;
+    }
+}
+
 public static class IpRelayController
 {
-    private const string RelayIp = "192.168.7.101";
-    private const int RelayPort = 6722;
-    private const int HoldTimeSeconds = 5;
-
     private static readonly Dictionary<int, (string On, string Off)> Commands = new()
     {
         { 1, ("11", "21") },
@@ -22,29 +64,6 @@ public static class IpRelayController
 
         try
         {
-            var onResponse = await SendCommandAsync(command.On);
-            var isOnConfirmed = IsBitSet(onResponse, doorNumber);
-            if (!isOnConfirmed)
-                return RelayCommandResult.FailureResult($"Relay ON failed. Response: {onResponse}");
-
-            // Start a background task to turn OFF relay after a delay
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(HoldTimeSeconds * 1000);
-                    var offResponse = await SendCommandAsync(command.Off);
-                    var isOffConfirmed = !IsBitSet(offResponse, doorNumber);
-                    Console.WriteLine(isOffConfirmed
-                        ? $"✅ Door {doorNumber} relay turned OFF"
-                        : $"⚠️ Door {doorNumber} relay failed to turn OFF. Response: {offResponse}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"❌ Error turning off door {doorNumber}: {ex.Message}");
-                }
-            });
-
             // Immediately return success after ON
             return RelayCommandResult.SuccessResult(doorNumber, onResponse, null);
         }
