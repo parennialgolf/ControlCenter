@@ -1,7 +1,9 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Shared;
+
 public class IntFromStringConverter : JsonConverter<int>
 {
     public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -17,6 +19,7 @@ public class IntFromStringConverter : JsonConverter<int>
     public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
         => writer.WriteNumberValue(value);
 }
+
 public class LongFromStringConverter : JsonConverter<long>
 {
     public override long Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -32,6 +35,7 @@ public class LongFromStringConverter : JsonConverter<long>
     public override void Write(Utf8JsonWriter writer, long value, JsonSerializerOptions options)
         => writer.WriteNumberValue(value);
 }
+
 public class DoubleFromStringConverter : JsonConverter<double>
 {
     public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -46,4 +50,18 @@ public class DoubleFromStringConverter : JsonConverter<double>
 
     public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options)
         => writer.WriteNumberValue(value);
+}
+
+public class IpAddressJsonConverter : JsonConverter<IPAddress>
+{
+    public override IPAddress Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var ipString = reader.GetString();
+        return IPAddress.Parse(ipString!);
+    }
+
+    public override void Write(Utf8JsonWriter writer, IPAddress value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString());
+    }
 }

@@ -2,7 +2,9 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 using Shared;
+using Shared.Models;
 using Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,10 +14,17 @@ builder.WebHost.UseUrls($"http://localhost:{builder.Configuration.GetValue<int>(
 
 builder.Services.AddHttpClient();
 
+builder.Services.Configure<DoorsConfig>(builder.Configuration.GetSection("Doors"));
+
+builder.Services.AddSingleton(sp =>
+    sp.GetRequiredService<IOptions<DoorsConfig>>().Value);
+
+builder.Services.AddTransient<ControlByWebRelayController>();
+
 // Configure JSON serialization options
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
-    options.SerializerOptions.Converters.Add(new IPAddressJsonConverter());
+    options.SerializerOptions.Converters.Add(new IpAddressJsonConverter());
 });
 
 var app = builder.Build();
@@ -28,35 +37,40 @@ if (app.Environment.IsDevelopment())
 
 // app.UseHttpsRedirection();
 
-app.MapPost("/doors/{doorNumber:int}/unlock", async (int doorNumber) =>
+app.MapPost("/doors/{doorNumber:int}/pulse", async (int doorNumber, ControlByWebRelayController controller) =>
 {
-    var result = await IpRelayController.TriggerDoorAsync(doorNumber);
+    var result = await controller.PulseAsync(doorNumber);
 
     return result.Success
         ? Results.Ok(result)
         : Results.BadRequest(result);
 });
 
-app.MapGet("/doors/status", async () =>
+app.MapPost("/doors/{doorNumber:int}/unlock", async (int doorNumber, ControlByWebRelayController controller) =>
 {
-    var result = await IpRelayController.GetRelayStatusAsync();
+    var result = await controller.OpenAsync(doorNumber);
 
     return result.Success
-        ? Results.Ok(new
-        {
-            result.Success,
-            result.RawResponse,
-            Doors = result.Doors!.Select(d => new
-            {
-                d.DoorNumber,
-                Status = d.IsOpen ? "UNLOCKED" : "LOCKED"
-            })
-        })
-        : Results.BadRequest(new
-        {
-            result.Success,
-            result.Error
-        });
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
+});
+
+app.MapPost("/doors/{doorNumber:int}/lock", async (int doorNumber, ControlByWebRelayController controller) =>
+{
+    var result = await controller.CloseAsync(doorNumber);
+
+    return result.Success
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
+});
+
+app.MapGet("/doors/status", async (ControlByWebRelayController controller) =>
+{
+    var result = await controller.StatusAsync();
+
+    return result.Success
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
 });
 
 
@@ -238,21 +252,6 @@ public record RegisteredProjector(
     string Name,
     string Ip,
     ProjectorProtocolType Protocol);
-
-// IPAddress JSON converter
-public class IPAddressJsonConverter : JsonConverter<IPAddress>
-{
-    public override IPAddress Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        var ipString = reader.GetString();
-        return IPAddress.Parse(ipString!);
-    }
-
-    public override void Write(Utf8JsonWriter writer, IPAddress value, JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(value.ToString());
-    }
-}
 
 public record LockerPassthroughResult
 {
