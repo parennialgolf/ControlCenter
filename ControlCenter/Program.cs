@@ -14,10 +14,10 @@ builder.WebHost.UseUrls($"http://localhost:{builder.Configuration.GetValue<int>(
 
 builder.Services.AddHttpClient();
 
+builder.Configuration.AddJsonFile("config.json", optional: false, reloadOnChange: true);
 builder.Services.Configure<DoorsConfig>(builder.Configuration.GetSection("Doors"));
-
-builder.Services.AddSingleton(sp =>
-    sp.GetRequiredService<IOptions<DoorsConfig>>().Value);
+builder.Services.Configure<LockersConfig>(builder.Configuration.GetSection("Lockers"));
+builder.Services.Configure<ProjectorsConfig>(builder.Configuration.GetSection("Projectors"));
 
 builder.Services.AddTransient<ControlByWebRelayController>();
 
@@ -75,10 +75,10 @@ app.MapGet("/doors/status", async (ControlByWebRelayController controller) =>
 
 
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
-    int lockerNumber,
-    HttpClient httpClient,
-    IConfiguration config,
-    ILogger<Program> logger) =>
+        int lockerNumber,
+        HttpClient httpClient,
+        IConfiguration config,
+        ILogger<Program> logger) =>
     {
         if (config.GetValue<bool>("USE_LEGACY_LOCKER_API"))
         {
@@ -100,13 +100,15 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
                 return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
             }
 
-            var result = JsonSerializer.Deserialize<LockerPassthroughResult>(await response.Content.ReadAsStringAsync());
+            var result =
+                JsonSerializer.Deserialize<LockerPassthroughResult>(await response.Content.ReadAsStringAsync());
 
             return Results.Ok(result);
         }
         else
         {
-            var forwardUrl = $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/{lockerNumber}/unlock";
+            var forwardUrl =
+                $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/{lockerNumber}/unlock";
 
             var response = await httpClient.PostAsync(forwardUrl, null);
             var body = await response.Content.ReadAsStringAsync();
@@ -114,8 +116,8 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
             var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
 
             return response.IsSuccessStatusCode
-                        ? Results.Ok(result)
-                    : Results.BadRequest(result);
+                ? Results.Ok(result)
+                : Results.BadRequest(result);
         }
     })
     .WithName("UnlockLocker");
@@ -129,35 +131,34 @@ app.MapGet("/lockers/status", async (
     {
         return Results.StatusCode(StatusCodes.Status501NotImplemented);
     }
-    else
+
+    var forwardUrl =
+        $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/status";
+
+    var response = await httpClient.GetAsync(forwardUrl);
+
+    if (!response.IsSuccessStatusCode)
     {
-        var forwardUrl = $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/status";
-
-        var response = await httpClient.GetAsync(forwardUrl);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
-        }
-
-        var body = await response.Content.ReadAsStringAsync();
-
-        var result = JsonSerializer.Deserialize<LockerStatusResponse>(body);
-
-        return Results.Ok(result);
+        return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
     }
+
+    var body = await response.Content.ReadAsStringAsync();
+
+    var result = JsonSerializer.Deserialize<LockerStatusResponse>(body);
+
+    return Results.Ok(result);
 });
 
 
-app.MapPost("projectors/{projectorId:int}/on", async (int projectorId) =>
+app.MapPost("projectors/{projectorId:int}/on", async (int projectorId, IOptionsMonitor<ProjectorsConfig> projectors) =>
 {
-    var projectorData = ProjectorRegistry.Projectors.FirstOrDefault(p => p.Id == projectorId);
+    var projectorData = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
     if (projectorData == null)
     {
         return Results.NotFound();
     }
 
-    var ipAddress = IPAddress.Parse(projectorData.Ip);
+    var ipAddress = IPAddress.Parse(projectorData.IpAddress);
     var projector = ProjectorControlFactory.Create(
         ipAddress,
         projectorData.Protocol);
@@ -176,15 +177,15 @@ app.MapPost("projectors/{projectorId:int}/on", async (int projectorId) =>
         : Results.BadRequest(result);
 });
 
-app.MapPost("projectors/{projectorId:int}/off", async (int projectorId) =>
+app.MapPost("projectors/{projectorId:int}/off", async (int projectorId, IOptionsMonitor<ProjectorsConfig> projectors) =>
 {
-    var projectorData = ProjectorRegistry.Projectors.FirstOrDefault(p => p.Id == projectorId);
+    var projectorData = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
     if (projectorData == null)
     {
         return Results.NotFound();
     }
 
-    var ipAddress = IPAddress.Parse(projectorData.Ip);
+    var ipAddress = IPAddress.Parse(projectorData.IpAddress);
     var projector = ProjectorControlFactory.Create(
         ipAddress,
         projectorData.Protocol);
@@ -203,12 +204,12 @@ app.MapPost("projectors/{projectorId:int}/off", async (int projectorId) =>
         : Results.BadRequest(result);
 });
 
-app.MapGet("/projectors/status", async () =>
+app.MapGet("/projectors/status", async (IOptionsMonitor<ProjectorsConfig> projectors) =>
 {
-    var tasks = ProjectorRegistry.Projectors
+    var tasks = projectors.CurrentValue.Projectors
         .Select(async projector =>
         {
-            var ip = IPAddress.Parse(projector.Ip);
+            var ip = IPAddress.Parse(projector.IpAddress);
             var control = ProjectorControlFactory.Create(ip, projector.Protocol);
 
             var result = await control.GetStatusAsync();
@@ -225,36 +226,40 @@ app.MapGet("/projectors/status", async () =>
     });
 });
 
+var configPath = Path.GetFullPath("config.json");
+
+app.MapGet("/config", async () =>
+{
+    if (!File.Exists(configPath))
+        return Results.NotFound("config.json not found.");
+
+    var json = await File.ReadAllTextAsync(configPath);
+    var config = JsonSerializer.Deserialize<RootConfig>(json, new JsonSerializerOptions
+    {
+        PropertyNameCaseInsensitive = false
+    });
+
+    return Results.Ok(config);
+});
+
+app.MapPost("/config", async (RootConfig updatedConfig) =>
+{
+    var json = JsonSerializer.Serialize(updatedConfig, new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = false,
+    });
+
+    await File.WriteAllTextAsync(configPath, json);
+
+    return Results.Ok(new { success = true });
+});
+
+
 
 await app.RunAsync();
 
-
-// public enum ProjectorStatus
-public record ProjectorControlRequest(
-    string IpAddress,
-    ProjectorProtocolType Protocol,
-    ProjectorStatusType Status);
-
-public static class ProjectorRegistry
-{
-    public static readonly List<RegisteredProjector> Projectors =
-    [
-        new(1, "Bay 1", "10.1.10.122", ProjectorProtocolType.Rs232),
-        new(2, "Bay 2", "10.1.10.138", ProjectorProtocolType.Rs232),
-        new(3, "Bay 3", "10.1.10.98", ProjectorProtocolType.Rs232),
-        new(4, "Bay 4", "10.1.10.60", ProjectorProtocolType.Rs232),
-        new(5, "Bay 5", "10.1.10.88", ProjectorProtocolType.Rs232)
-    ];
-}
-
-public record RegisteredProjector(
-    int Id,
-    string Name,
-    string Ip,
-    ProjectorProtocolType Protocol);
-
 public record LockerPassthroughResult
 {
-    [JsonPropertyName("message")]
-    public string Message { get; set; } = string.Empty;
+    [JsonPropertyName("message")] public string Message { get; set; } = string.Empty;
 };

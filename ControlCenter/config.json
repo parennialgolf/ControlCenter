@@ -1,62 +1,52 @@
 {
-  "system": {
-    "system_id": "pgl-1",
-    "flask_host": "0.0.0.0",
-    "flask_port": 5022,
-    "debug": false
+  "Doors": {
+    "Managed": true,
+    "Max": 1,
+    "IpAddress": "192.168.7.200"
   },
-  "doors": {
-    "managed": true,
-    "max": 1,
-    "relays": [
+  "Projectors": {
+    "Managed": true,
+    "Max": 0,
+    "Projectors": [
       {
-        "id": 1,
-        "host": "192.168.7.200"
+        "Id": 1,
+        "Name": "Bay 1",
+        "IpAddress": "10.1.10.122",
+        "Protocol": "Rs232"
+      },
+      {
+        "Id": 2,
+        "Name": "Bay 2",
+        "IpAddress": "10.1.10.138",
+        "Protocol": "Rs232"
+      },
+      {
+        "Id": 3,
+        "Name": "Bay 3",
+        "IpAddress": "10.1.10.98",
+        "Protocol": "Rs232"
+      },
+      {
+        "Id": 4,
+        "Name": "Bay 4",
+        "IpAddress": "10.1.10.60",
+        "Protocol": "Rs232"
+      },
+      {
+        "Id": 5,
+        "Name": "Bay 5",
+        "IpAddress": "10.1.10.88",
+        "Protocol": "Rs232"
       }
     ]
   },
-  "lockers": {
-    "managed": false,
-    "max": 34,
-    "serialPorts": [
+  "Lockers": {
+    "Managed": false,
+    "Max": 34,
+    "SerialPorts": [
       "/dev/ttyUSB0",
       "/dev/ttyUSB1",
       "/dev/ttyUSB2"
     ]
-  },
-  "projectors": {
-    "projectors_managed": true,
-    "projectors": [
-      {
-        "id": 1,
-        "name": "Bay 1",
-        "ip": "10.1.10.122",
-        "protocol": "Rs232"
-      },
-      {
-        "id": 2,
-        "name": "Bay 2",
-        "ip": "10.1.10.138",
-        "protocol": "Rs232"
-      },
-      {
-        "id": 3,
-        "name": "Bay 3",
-        "ip": "10.1.10.98",
-        "protocol": "Rs232"
-      },
-      {
-        "id": 4,
-        "name": "Bay 4",
-        "ip": "10.1.10.60",
-        "protocol": "Rs232"
-      },
-      {
-        "id": 5,
-        "name": "Bay 5",
-        "ip": "10.1.10.88",
-        "protocol": "Rs232"
-      }
-    ]
   }
-} 
+}

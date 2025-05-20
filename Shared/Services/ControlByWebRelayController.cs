@@ -1,21 +1,27 @@
 using System.Text.Json;
 using System.Xml.Serialization;
+using Microsoft.Extensions.Options;
 using Shared.Models;
 
 namespace Shared.Services;
 
 public class ControlByWebRelayController(
-    DoorsConfig doors,
+    IOptionsMonitor<DoorsConfig> config,
     HttpClient httpClient)
 {
+    private readonly DoorsConfig _doors = config.CurrentValue;
     public async Task<DoorsCommandResult> OpenAsync(int doorNumber)
     {
-        if (doorNumber < 1 || doorNumber > doors.Max)
-            return DoorsCommandResult.FailureResult("Invalid door number.", doorNumber);
 
         try
         {
-            var response = await httpClient.GetAsync(ControlByWebRelayCommands.On(doors.IpAddress, doorNumber));
+            if (_doors.Managed == false)
+                return DoorsCommandResult.FailureResult("Doors are not managed.", doorNumber);
+
+            if (doorNumber < 1 || doorNumber > _doors.Max)
+                return DoorsCommandResult.FailureResult("Invalid door number.", doorNumber);
+            
+            var response = await httpClient.GetAsync(ControlByWebRelayCommands.On(_doors.IpAddress, doorNumber));
 
             if (!response.IsSuccessStatusCode)
                 return DoorsCommandResult.FailureResult($"Relay responded with {response.StatusCode}", doorNumber);
@@ -36,12 +42,16 @@ public class ControlByWebRelayController(
 
     public async Task<DoorsCommandResult> CloseAsync(int doorNumber)
     {
-        if (doorNumber < 1 || doorNumber > doors.Max)
-            return DoorsCommandResult.FailureResult("Invalid door number.", doorNumber);
 
         try
         {
-            var response = await httpClient.GetAsync(ControlByWebRelayCommands.Off(doors.IpAddress, doorNumber));
+            if (_doors.Managed == false)
+                return DoorsCommandResult.FailureResult("Doors are not managed.", doorNumber);
+
+            if (doorNumber < 1 || doorNumber > _doors.Max)
+                return DoorsCommandResult.FailureResult("Invalid door number.", doorNumber);
+            
+            var response = await httpClient.GetAsync(ControlByWebRelayCommands.Off(_doors.IpAddress, doorNumber));
 
             if (!response.IsSuccessStatusCode)
                 return DoorsCommandResult.FailureResult($"Relay responded with {response.StatusCode}", doorNumber);
@@ -62,12 +72,15 @@ public class ControlByWebRelayController(
 
     public async Task<DoorsCommandResult> PulseAsync(int doorNumber)
     {
-        if (doorNumber < 1 || doorNumber > doors.Max)
+        if (_doors.Managed == false)
+            return DoorsCommandResult.FailureResult("Doors are not managed.", doorNumber);
+        
+        if (doorNumber < 1 || doorNumber > _doors.Max)
             return DoorsCommandResult.FailureResult("Invalid door number.", doorNumber);
 
         try
         {
-            var response = await httpClient.GetAsync(ControlByWebRelayCommands.Pulse(doors.IpAddress, doorNumber));
+            var response = await httpClient.GetAsync(ControlByWebRelayCommands.Pulse(_doors.IpAddress, doorNumber));
 
             if (!response.IsSuccessStatusCode)
                 return DoorsCommandResult.FailureResult($"Relay responded with {response.StatusCode}", doorNumber);
@@ -90,7 +103,10 @@ public class ControlByWebRelayController(
     {
         try
         {
-            var response = await httpClient.GetAsync(ControlByWebRelayCommands.Status(doors.IpAddress));
+            if (_doors.Managed == false)
+                return DoorsCommandResult.FailureResult("Doors are not managed.", 0);
+            
+            var response = await httpClient.GetAsync(ControlByWebRelayCommands.Status(_doors.IpAddress));
             if (!response.IsSuccessStatusCode)
                 return DoorsCommandResult.FailureResult($"Relay responded with {response.StatusCode}", 0);
 
