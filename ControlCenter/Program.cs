@@ -12,7 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Configure Kestrel to use port 5021
 builder.WebHost.UseUrls($"http://localhost:{builder.Configuration.GetValue<int>("CONTROL_CENTER_PORT")}");
 
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<ControlByWebRelayController>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 builder.Configuration.AddJsonFile("config.json", optional: false, reloadOnChange: true);
 builder.Services.Configure<DoorsConfig>(builder.Configuration.GetSection("Doors"));
