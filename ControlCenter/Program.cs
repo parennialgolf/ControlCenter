@@ -77,10 +77,11 @@ app.MapGet("/doors/status", async (ControlByWebRelayController controller) =>
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         int lockerNumber,
         HttpClient httpClient,
+        IOptionsMonitor<LockersConfig> lockerConfig,
         IConfiguration config,
         ILogger<Program> logger) =>
     {
-        if (config.GetValue<bool>("USE_LEGACY_LOCKER_API"))
+        if (lockerConfig.CurrentValue.UseLegacy)
         {
             // curl -X POST http://10.1.10.150:5000/unlock \
             // -H "Content-Type: application/json" \

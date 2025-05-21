@@ -42,6 +42,7 @@
   },
   "Lockers": {
     "Managed": false,
+    "UseLegacy": true,
     "Max": 34,
     "SerialPorts": [
       "/dev/ttyUSB0",
