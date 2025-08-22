@@ -22,49 +22,31 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
     public async Task<ProjectorCommandResult> OnAsync()
     {
         var result = await SendCommandAsync(protocol.On, expectResponse: true);
-
         if (!result.WasSent)
-            return ProjectorCommandResult.FailureResult(
-                ip,
-                "Failed to send power ON command.",
+            return ProjectorCommandResult.FailureResult(ip, "Failed to send power ON command.",
                 result.Error ?? "Unknown error");
 
-        var confirmed = protocol.ParseStatus(result.Response ?? "") == ProjectorStatusType.On;
+        var response = result.Response ?? string.Empty;
+        var ack = protocol.IsCommandAcknowledgement(response, ProjectorStatusType.On);
 
-        return confirmed
-            ? ProjectorCommandResult.SuccessResult(
-                ip,
-                "Power ON confirmed.",
-                ProjectorStatusType.On,
-                result.Response)
-            : ProjectorCommandResult.FailureResult(
-                ip,
-                "Power ON not confirmed by projector.",
-                result.Response);
+        return ack
+            ? ProjectorCommandResult.SuccessResult(ip, "Power ON acknowledged.", ProjectorStatusType.On, response)
+            : ProjectorCommandResult.FailureResult(ip, "Power ON not confirmed by projector.", response);
     }
 
     public async Task<ProjectorCommandResult> OffAsync()
     {
         var result = await SendCommandAsync(protocol.Off, expectResponse: true);
-
         if (!result.WasSent)
-            return ProjectorCommandResult.FailureResult(
-                ip,
-                "Failed to send power OFF command.",
+            return ProjectorCommandResult.FailureResult(ip, "Failed to send power OFF command.",
                 result.Error ?? "Unknown error");
 
-        var confirmed = protocol.ParseStatus(result.Response ?? "") == ProjectorStatusType.Off;
+        var response = result.Response ?? string.Empty;
+        var ack = protocol.IsCommandAcknowledgement(response, ProjectorStatusType.Off);
 
-        return confirmed
-            ? ProjectorCommandResult.SuccessResult(
-                ip,
-                "Power OFF confirmed.",
-                ProjectorStatusType.Off,
-                result.Response)
-            : ProjectorCommandResult.FailureResult(
-                ip,
-                "Power OFF not confirmed by projector.",
-                result.Response);
+        return ack
+            ? ProjectorCommandResult.SuccessResult(ip, "Power OFF acknowledged.", ProjectorStatusType.Off, response)
+            : ProjectorCommandResult.FailureResult(ip, "Power OFF not confirmed by projector.", response);
     }
 
 
