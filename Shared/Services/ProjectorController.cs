@@ -55,17 +55,23 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
         var result = await SendCommandAsync(protocol.Status, expectResponse: true);
 
         if (!result.WasSent || string.IsNullOrWhiteSpace(result.Response))
+        {
             return ProjectorCommandResult.FailureResult(
                 ip,
                 "No response from projector.",
                 result.Error ?? "Unknown error");
+        }
 
         var status = protocol.ParseStatus(result.Response);
-        var message = status switch
+
+        string message = status switch
         {
             ProjectorStatusType.On => "Projector is ON",
             ProjectorStatusType.Off => "Projector is OFF",
-            _ => "Projector status unknown"
+            ProjectorStatusType.WarmingUp => "Projector is warming up",
+            ProjectorStatusType.CoolingDown => "Projector is cooling down",
+            ProjectorStatusType.Failure => "Projector reported an error",
+            _ => $"Projector status unknown (raw: {result.Response})"
         };
 
         return ProjectorCommandResult.SuccessResult(ip, message, status, result.Response);
@@ -81,20 +87,18 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
             await client.ConnectAsync(ip, protocol.Port, cts.Token);
             await using var stream = client.GetStream();
 
-            // --- Step 1: Read initial handshake if projector sends it ---
+            // --- Step 1: Handle PJLink handshake ---
             if (protocol is PjLinkProtocol)
             {
                 var handshakeBuffer = new byte[256];
-                if (stream.DataAvailable)
-                {
-                    var handshakeBytes = await stream.ReadAsync(handshakeBuffer, cts.Token);
-                    var handshake = Encoding.ASCII.GetString(handshakeBuffer, 0, handshakeBytes).Trim();
-                    if (!handshake.StartsWith("PJLINK"))
-                    {
-                        return ProjectorTransmissionResult.Failure($"Unexpected handshake: {handshake}");
-                    }
-                    // If handshake was "PJLINK 1" we’d need to do auth here
-                }
+                var handshakeBytes = await stream.ReadAsync(handshakeBuffer, cts.Token);
+                var handshake = Encoding.ASCII.GetString(handshakeBuffer, 0, handshakeBytes).Trim('\0', '\r', '\n');
+
+                if (!handshake.StartsWith("PJLINK"))
+                    return ProjectorTransmissionResult.Failure($"Unexpected handshake: {handshake}");
+
+                if (handshake == "PJLINK 1")
+                    return ProjectorTransmissionResult.Failure("Authentication required but not implemented.");
             }
 
             // --- Step 2: Send command ---
@@ -104,7 +108,7 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
             if (!expectResponse)
                 return ProjectorTransmissionResult.Success();
 
-            // --- Step 3: Read actual response ---
+            // --- Step 3: Read response ---
             var buffer = new byte[256];
             var bytesRead = await stream.ReadAsync(buffer, cts.Token);
             var response = Encoding.ASCII.GetString(buffer, 0, bytesRead).Trim('\0', '\r', '\n');
