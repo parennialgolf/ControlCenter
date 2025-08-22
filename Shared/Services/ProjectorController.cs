@@ -81,15 +81,33 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
             await client.ConnectAsync(ip, protocol.Port, cts.Token);
             await using var stream = client.GetStream();
 
+            // --- Step 1: Read initial handshake if projector sends it ---
+            if (protocol is PjLinkProtocol)
+            {
+                var handshakeBuffer = new byte[256];
+                if (stream.DataAvailable)
+                {
+                    var handshakeBytes = await stream.ReadAsync(handshakeBuffer, cts.Token);
+                    var handshake = Encoding.ASCII.GetString(handshakeBuffer, 0, handshakeBytes).Trim();
+                    if (!handshake.StartsWith("PJLINK"))
+                    {
+                        return ProjectorTransmissionResult.Failure($"Unexpected handshake: {handshake}");
+                    }
+                    // If handshake was "PJLINK 1" we’d need to do auth here
+                }
+            }
+
+            // --- Step 2: Send command ---
             var bytes = Encoding.ASCII.GetBytes(command);
             await stream.WriteAsync(bytes, cts.Token);
 
             if (!expectResponse)
                 return ProjectorTransmissionResult.Success();
 
+            // --- Step 3: Read actual response ---
             var buffer = new byte[256];
             var bytesRead = await stream.ReadAsync(buffer, cts.Token);
-            var response = Encoding.ASCII.GetString(buffer, 0, bytesRead).Trim('\0');
+            var response = Encoding.ASCII.GetString(buffer, 0, bytesRead).Trim('\0', '\r', '\n');
 
             return ProjectorTransmissionResult.Success(response);
         }
