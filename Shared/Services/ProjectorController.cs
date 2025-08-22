@@ -64,7 +64,7 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
 
         var status = protocol.ParseStatus(result.Response);
 
-        string message = status switch
+        var message = status switch
         {
             ProjectorStatusType.On => "Projector is ON",
             ProjectorStatusType.Off => "Projector is OFF",

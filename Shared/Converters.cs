@@ -65,3 +65,43 @@ public class IpAddressJsonConverter : JsonConverter<IPAddress>
         writer.WriteStringValue(value.ToString());
     }
 }
+
+public class ProjectorStatusJsonConverter : JsonConverter<ProjectorStatusType>
+{
+    public override ProjectorStatusType Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        var str = reader.GetString();
+        return str?.ToLowerInvariant() switch
+        {
+            "On" => ProjectorStatusType.On,
+            "Off" => ProjectorStatusType.Off,
+            "WarmingUp" => ProjectorStatusType.WarmingUp,
+            "CoolingDown" => ProjectorStatusType.CoolingDown,
+            "Success" => ProjectorStatusType.Success,
+            "Failure" => ProjectorStatusType.Failure,
+            _ => ProjectorStatusType.Unknown
+        };
+    }
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        ProjectorStatusType value,
+        JsonSerializerOptions options)
+    {
+        var str = value switch
+        {
+            ProjectorStatusType.On => "On",
+            ProjectorStatusType.Off => "Off",
+            ProjectorStatusType.WarmingUp => "WarmingUp",
+            ProjectorStatusType.CoolingDown => "CoolingDown",
+            ProjectorStatusType.Success => "Success",
+            ProjectorStatusType.Failure => "Failure",
+            _ => "Unknown"
+        };
+
+        writer.WriteStringValue(str);
+    }
+}

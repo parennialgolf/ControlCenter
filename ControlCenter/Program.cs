@@ -25,6 +25,7 @@ builder.Services.AddTransient<ControlByWebRelayController>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new IpAddressJsonConverter());
+    options.SerializerOptions.Converters.Add(new ProjectorStatusJsonConverter());
 });
 
 var app = builder.Build();
