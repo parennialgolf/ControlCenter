@@ -4,8 +4,12 @@ namespace Shared;
 
 public enum ProjectorStatusType
 {
+    Unknown,
+    Success, // ACK from projector
     On,
     Off,
+    WarmingUp,
+    CoolingDown,
     Failure
 }
 
@@ -40,7 +44,7 @@ public class ProjectorCommandResult
 
     public static ProjectorCommandResult FailureResult(
         IPAddress ipAddress,
-        string message, 
+        string message,
         string? rawResponse = null)
         => new()
         {

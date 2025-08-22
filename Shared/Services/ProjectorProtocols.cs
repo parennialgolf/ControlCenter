@@ -41,13 +41,24 @@ public class PjLinkProtocol : IProjectorProtocol
     public string Off => "%1POWR 0\r";
     public string Status => "%1POWR ?\r";
 
-    public ProjectorStatusType ParseStatus(string response) =>
-        response switch
+    public ProjectorStatusType ParseStatus(string response)
+    {
+        if (string.IsNullOrWhiteSpace(response))
+            return ProjectorStatusType.Failure;
+
+        response = response.Trim();
+
+        return response switch
         {
-            var r when r.Contains("1POWR=1") => ProjectorStatusType.On,
-            var r when r.Contains("1POWR=0") => ProjectorStatusType.Off,
-            _ => ProjectorStatusType.Failure
+            "%1POWR=0" => ProjectorStatusType.Off,
+            "%1POWR=1" => ProjectorStatusType.On,
+            "%1POWR=2" => ProjectorStatusType.WarmingUp,
+            "%1POWR=3" => ProjectorStatusType.CoolingDown,
+            "%1POWR=OK" => ProjectorStatusType.Success, // ACK for On/Off
+            "%1POWR=ERR" => ProjectorStatusType.Failure, // failed command
+            _ => ProjectorStatusType.Unknown
         };
+    }
 }
 
 public class SonyProtocol : IProjectorProtocol

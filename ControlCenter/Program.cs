@@ -151,7 +151,9 @@ app.MapGet("/lockers/status", async (
 });
 
 
-app.MapPost("projectors/{projectorId:int}/on", async (int projectorId, IOptionsMonitor<ProjectorsConfig> projectors) =>
+app.MapPost("projectors/{projectorId:int}/on", async (
+    int projectorId,
+    IOptionsMonitor<ProjectorsConfig> projectors) =>
 {
     var projectorData = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
     if (projectorData == null)
@@ -255,7 +257,6 @@ app.MapPost("/config", async (RootConfig updatedConfig) =>
 
     return Results.Ok(new { success = true });
 });
-
 
 
 await app.RunAsync();
