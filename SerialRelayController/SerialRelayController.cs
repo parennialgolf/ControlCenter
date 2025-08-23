@@ -1,4 +1,5 @@
 using System.IO.Ports;
+using System.Text.Json.Serialization;
 using Quartz;
 using SerialRelayController.Jobs;
 
@@ -13,7 +14,11 @@ public record SerialCommandResult(
     string? StatusResponse = null,
     string? Error = null);
 
-public record Command(string On, string Off);
+public class Command
+{
+    [JsonPropertyName("on")] public string On { get; init; } = string.Empty;
+    [JsonPropertyName("off")] public string Off { get; init; } = string.Empty;
+}
 
 public record UnlockDuration(int Delay);
 

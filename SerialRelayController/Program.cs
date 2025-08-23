@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Quartz;
 using SerialRelayController;
@@ -124,3 +125,20 @@ app.MapGet("/lockers/status", (SerialPorts ports) =>
     .WithDescription("Returns the status of all lockers across all relay boards.");
 
 await app.RunAsync();
+
+public record LockerStatusResponse(
+    bool Success,
+    List<LockerStatusResult> Data
+);
+
+public record LockerStatusResult(
+    int LockerNumber,
+    LockerStatus Status);
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LockerStatus
+{
+    Locked,
+    Unlocked,
+    Unknown
+}
