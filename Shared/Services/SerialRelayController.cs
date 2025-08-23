@@ -34,12 +34,10 @@ public static class SerialRelayController
                 }
 
 #pragma warning disable CA1416
-                using var serialPort = new SerialPort(port, 9600, Parity.None, 8, StopBits.One)
-                {
-                    ReadTimeout = 2000,
-                    WriteTimeout = 2000,
-                    NewLine = "\r\n"
-                };
+                using var serialPort = new SerialPort(port, 9600, Parity.None, 8, StopBits.One);
+                serialPort.ReadTimeout = 2000;
+                serialPort.WriteTimeout = 2000;
+                serialPort.NewLine = "\r\n";
 
                 serialPort.Open();
                 serialPort.DiscardInBuffer();
@@ -118,27 +116,23 @@ public static class SerialRelayController
         return new GetRelayResult(serialPort, channel);
     }
 
-    /// <summary>
-    /// Sends an ON command to the relay, verifies status, then turns it OFF.
-    /// </summary>
-    public static async Task<SerialCommandResult> SendToSerialWithConfirmation(string portPath, int channel)
+    public static Task<SerialCommandResult> SendToSerialWithConfirmation(string portPath, int channel)
     {
         try
         {
             if (!File.Exists(portPath))
-                return new SerialCommandResult(false, Error: $"Port {portPath} does not exist.");
+                return Task.FromResult(new SerialCommandResult(false, Error: $"Port {portPath} does not exist."));
 
             var command = SerialRelayCommands.GetCommand(channel);
             if (command == null)
-                return new SerialCommandResult(false, Error: $"No command defined for channel {channel}.");
+                return Task.FromResult(new SerialCommandResult(false,
+                    Error: $"No command defined for channel {channel}."));
 
 #pragma warning disable CA1416
-            using var serialPort = new SerialPort(portPath, 9600)
-            {
-                ReadTimeout = 2000,
-                WriteTimeout = 2000,
-                NewLine = "\r\n"
-            };
+            using var serialPort = new SerialPort(portPath, 9600);
+            serialPort.ReadTimeout = 2000;
+            serialPort.WriteTimeout = 2000;
+            serialPort.NewLine = "\r\n";
 
             serialPort.Open();
             serialPort.DiscardInBuffer();
@@ -148,65 +142,62 @@ public static class SerialRelayController
             var onCmd = command.On.Replace("\\r", "\r").Replace("\\n", "\n");
             serialPort.Write(onCmd);
 
-            // 2. Wait a bit for relay to actuate
-            await Task.Delay(1000);
-
-            // 3. Ask for status
-            var statusCmd = SerialRelayCommands.Status.On
-                .Replace("\\r", "\r")
-                .Replace("\\n", "\n");
-            serialPort.Write(statusCmd);
-
-            string? response = null;
+            // 2. Read echo back
+            string? response;
             try
             {
                 response = serialPort.ReadLine();
             }
             catch (TimeoutException)
             {
-                return new SerialCommandResult(false, Error: "Relay timed out waiting for status response.");
+                return Task.FromResult(new SerialCommandResult(false,
+                    Error: "No response (echo) received from relay."));
             }
 
-            var success = IsRelayOn(response, channel);
+            var normalizedResponse = response?.Trim();
+            var normalizedCommand = onCmd.Trim();
 
-            // 4. Always send OFF after confirmation
-            var offCmd = command.Off.Replace("\\r", "\r").Replace("\\n", "\n");
-            serialPort.Write(offCmd);
+            var success = !string.IsNullOrWhiteSpace(normalizedResponse) &&
+                          normalizedResponse.Equals(normalizedCommand, StringComparison.OrdinalIgnoreCase);
 
-            return new SerialCommandResult(success, StatusResponse: response,
-                Error: success ? null : $"Relay {channel} did not report ON.");
+            if (!success)
+                return Task.FromResult(new SerialCommandResult(
+                    false,
+                    StatusResponse: response,
+                    Error: $"Relay did not echo back ON command correctly."));
+            // 3. Respond immediately to API caller, and schedule OFF in background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(10000);
+                    var offCmd = command.Off.Replace("\\r", "\r").Replace("\\n", "\n");
+
+                    using var offPort = new SerialPort(portPath, 9600);
+                    offPort.WriteTimeout = 2000;
+                    offPort.Open();
+                    offPort.Write(offCmd);
+                    Console.WriteLine("Successfully closed serial port.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Failed to send OFF command for channel {channel}: {ex.Message}");
+                }
+            });
+
+            return Task.FromResult(new SerialCommandResult(true, StatusResponse: response));
+
 #pragma warning restore CA1416
         }
         catch (UnauthorizedAccessException)
         {
-            return new SerialCommandResult(false,
-                Error: $"Permission denied to open {portPath}. Is the relay connected and accessible?");
+            return Task.FromResult(new SerialCommandResult(false,
+                Error: $"Permission denied to open {portPath}. Is the relay connected and accessible?"));
         }
         catch (Exception ex)
         {
-            return new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}");
+            return Task.FromResult(new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}"));
         }
-    }
-
-    /// <summary>
-    /// Parses relay status response into ON/OFF state.
-    /// </summary>
-    private static bool IsRelayOn(string? response, int relayChannel)
-    {
-        if (string.IsNullOrWhiteSpace(response) || response.Length < 10)
-            return false;
-
-        response = response.TrimStart(':').Trim();
-        var hexBitfield = response.Substring(6, 4);
-        var bytes = new byte[2];
-        bytes[0] = Convert.ToByte(hexBitfield[..2], 16);
-        bytes[1] = Convert.ToByte(hexBitfield.Substring(2, 2), 16);
-
-        var channelIndex = relayChannel - 1;
-        var byteIndex = channelIndex / 8;
-        var bitIndex = channelIndex % 8;
-
-        return (bytes[byteIndex] & (1 << bitIndex)) != 0;
     }
 }
 
