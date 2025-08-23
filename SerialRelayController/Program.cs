@@ -32,7 +32,7 @@ builder.Services.AddQuartz(q =>
     }
 });
 
-builder.Services.AddQuartzHostedService(opt => { opt.WaitForJobsToComplete = true; });
+builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 
