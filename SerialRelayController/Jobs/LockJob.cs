@@ -6,7 +6,9 @@ namespace SerialRelayController.Jobs;
 /// <summary>
 /// Quartz job that sends the OFF command to a relay, marking a locker as locked again.
 /// </summary>
-public class LockJob(LockerStateCache cache) : IJob
+public class LockJob(
+    SerialPorts ports,
+    LockerStateCache cache) : IJob
 {
     private const string Key = "LockerNumber";
 
@@ -38,8 +40,8 @@ public class LockJob(LockerStateCache cache) : IJob
 
         try
         {
-            var relay = SerialRelayController.GetRelay(lockerNumber);
-            var command = SerialRelayCommands.GetCommand(relay.Channel);
+            var relay = ports.GetRelay(lockerNumber);
+            var command = ports.GetCommand(relay.Channel);
             if (command == null)
             {
                 Console.WriteLine($"⚠️ No OFF command defined for locker {lockerNumber}");

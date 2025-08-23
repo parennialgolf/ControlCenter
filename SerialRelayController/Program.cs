@@ -4,8 +4,12 @@ using SerialRelayController;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.Configure<SerialPortOptions>(
+    builder.Configuration.GetSection("SerialPortOptions"));
+
 builder.Services.AddTransient<SerialRelayController.SerialRelayController>();
 builder.Services.AddSingleton<LockerStateCache>();
+builder.Services.AddTransient<SerialPorts>();
 
 // Quartz with SQLite
 builder.Services.AddQuartz(q =>
@@ -14,11 +18,9 @@ builder.Services.AddQuartz(q =>
     q.UsePersistentStore(store =>
     {
         store.UseProperties = true;
-// #pragma warning disable CS0618
-//         store.UseJsonSerializer(); // System.Text.Json, safe for primitives
-// #pragma warning restore CS0618
+        store.UseSystemTextJsonSerializer();
 
-        store.UseSQLite(sqlite => { sqlite.ConnectionString = "Data Source=/home/user/quartz.db;"; });
+        store.UseSQLite(sqlite => sqlite.ConnectionString = "Data Source=/home/user/ControlCenter/quartz.db;");
     });
 });
 
@@ -71,11 +73,11 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 
 app.MapGet("/lockers/{lockerNumber:int}/status", (
         int lockerNumber,
-        SerialRelayController.SerialRelayController relay) =>
+        SerialPorts ports) =>
     {
         try
         {
-            var statuses = relay.GetAllStatuses();
+            var statuses = ports.GetAllStatuses();
 
             var lockerStatus = statuses.FirstOrDefault(s => s.LockerNumber == lockerNumber);
 
@@ -107,9 +109,9 @@ app.MapGet("/lockers/{lockerNumber:int}/status", (
     })
     .WithName("LockerStatus");
 
-app.MapGet("/lockers/status", (SerialRelayController.SerialRelayController relay) =>
+app.MapGet("/lockers/status", (SerialPorts ports) =>
     {
-        var statuses = relay.GetAllStatuses();
+        var statuses = ports.GetAllStatuses();
 
         return Results.Ok(new LockerStatusResponse(
             true,

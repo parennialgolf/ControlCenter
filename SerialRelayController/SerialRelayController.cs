@@ -1,104 +1,83 @@
-using System.Collections.Concurrent;
 using System.IO.Ports;
+using System.Text.Json.Serialization;
 using Quartz;
 using SerialRelayController.Jobs;
-using Shared;
+using Shared.Services;
 
 namespace SerialRelayController;
 
 public record UnlockDuration(int Delay);
 
-public class LockerStateCache
-{
-    private readonly ConcurrentDictionary<int, bool> _states = new();
-
-    public void MarkUnlocked(int lockerNumber)
-        => _states[lockerNumber] = true;
-
-    public void MarkLocked(int lockerNumber)
-        => _states[lockerNumber] = false;
-
-    public bool IsUnlocked(int lockerNumber)
-        => _states.TryGetValue(lockerNumber, out var state) && state;
-}
-
 public class SerialRelayController(
+    SerialPorts ports,
     LockerStateCache cache,
     ISchedulerFactory factory)
 {
-    // Fixed mapping of relay boards to ports (order matters).
-    private static readonly List<string> SerialPortPaths =
-    [
-        "/dev/ttyUSB0", // board three
-        "/dev/ttyUSB1", // board one
-        "/dev/ttyUSB2" // board two
-    ];
-
-    private const int ChannelsPerBoard = 16;
-
-    public List<LockerRelayStatus> GetAllStatuses()
-    {
-        var results = new List<LockerRelayStatus>();
-
-        for (var boardIndex = 0; boardIndex < SerialPortPaths.Count; boardIndex++)
-        {
-            for (var i = 0; i < ChannelsPerBoard; i++)
-            {
-                var lockerNumber = boardIndex * ChannelsPerBoard + i + 1;
-                var isOn = cache.IsUnlocked(lockerNumber);
-                results.Add(new LockerRelayStatus(lockerNumber, isOn));
-            }
-        }
-
-        return results;
-    }
-
     /// <summary>
-    /// Maps a locker number to the correct serial port + relay channel.
-    /// </summary>
-    public static GetRelayResult GetRelay(int lockerNumber)
-    {
-        var portIndex = (lockerNumber - 1) / ChannelsPerBoard;
-        if (portIndex < 0 || portIndex >= SerialPortPaths.Count)
-            throw new ArgumentOutOfRangeException(nameof(lockerNumber));
-
-        var serialPort = SerialPortPaths[portIndex];
-        var channel = ((lockerNumber - 1) % ChannelsPerBoard) + 1;
-        return new GetRelayResult(serialPort, channel);
-    }
-
-    /// <summary>
-    /// Unlock a locker by sending ON, confirming echo, scheduling OFF,
-    /// and updating the soft latch cache.
+    /// High-level Unlock method:
+    /// 1. Map locker → board/channel
+    /// 2. Send ON command and confirm
+    /// 3. Update cache
+    /// 4. Schedule relock job with Quartz
     /// </summary>
     public async Task<SerialCommandResult> Unlock(int lockerNumber, UnlockDuration duration)
     {
-        var portIndex = (lockerNumber - 1) / ChannelsPerBoard;
-        var channel = (lockerNumber - 1) % ChannelsPerBoard + 1;
-
-        if (portIndex < 0 || portIndex >= SerialPortPaths.Count)
-            return new SerialCommandResult(false, Error: "Invalid locker number");
-
-        var portPath = SerialPortPaths[portIndex];
-        if (!File.Exists(portPath))
-            return new SerialCommandResult(false, Error: $"Port {portPath} not found");
-
         try
         {
+            var relay = ports.GetRelay(lockerNumber);
+            if (!File.Exists(relay.SerialPort))
+                return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
+
+            // Low-level confirmation
+            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel);
+
+            if (!result.Success)
+                return result;
+
+            // Update cache
+            cache.MarkUnlocked(lockerNumber);
+
+            // Schedule Quartz job to re-lock
+            var scheduler = await factory.GetScheduler();
+            var job = LockJob.BuildJob();
+            var trigger = LockJob.BuildTrigger(lockerNumber, duration.Delay);
+
+            await scheduler.ScheduleJob(job, trigger);
+
+            Console.WriteLine($"✅ Successfully unlocked locker {lockerNumber} on {relay.SerialPort}");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Low-level: send ON and confirm by status response.
+    /// </summary>
+    private static async Task<SerialCommandResult> SendToSerialWithConfirmation(string portPath, int channel)
+    {
+        try
+        {
+            var command = SerialRelayCommands.GetCommand(channel);
+            if (command == null)
+                return new SerialCommandResult(false, Error: $"No command defined for channel {channel}.");
+
             using var serialPort = new SerialPort(portPath, 9600, Parity.None, 8, StopBits.One);
             serialPort.ReadTimeout = 2000;
             serialPort.WriteTimeout = 2000;
             serialPort.NewLine = "\r\n";
+
             serialPort.Open();
+            serialPort.DiscardInBuffer();
+            serialPort.DiscardOutBuffer();
 
-            // Build ON command for this channel
-            var command = SerialRelayCommands.GetCommand(channel);
-            if (command == null)
-                return new SerialCommandResult(false, Error: $"No command defined for channel {channel}");
-
+            // Send ON
             var onCmd = command.On.Replace("\\r", "\r").Replace("\\n", "\n");
             serialPort.Write(onCmd);
 
+            // Read echo
             string? response;
             try
             {
@@ -109,7 +88,7 @@ public class SerialRelayController(
                 return new SerialCommandResult(false, Error: "No echo received from relay");
             }
 
-            // Success = echoed the same command
+            // Confirm echo matches
             var success = !string.IsNullOrWhiteSpace(response) &&
                           response.Trim().Equals(onCmd.Trim(), StringComparison.OrdinalIgnoreCase);
 
@@ -118,15 +97,6 @@ public class SerialRelayController(
                     false,
                     StatusResponse: response,
                     Error: "Relay did not echo back ON command correctly");
-
-
-            cache.MarkUnlocked(lockerNumber);
-
-            var scheduler = await factory.GetScheduler();
-            var job = LockJob.BuildJob();
-            var trigger = LockJob.BuildTrigger(lockerNumber, duration.Delay); // 10 sec delay
-
-            await scheduler.ScheduleJob(job, trigger);
 
             return new SerialCommandResult(true, StatusResponse: response);
         }
@@ -139,4 +109,19 @@ public class SerialRelayController(
             await Task.CompletedTask;
         }
     }
+}
+
+public record LockerRelayStatus(int LockerNumber, bool IsOn);
+
+public record GetRelayResult(string SerialPort, int Channel);
+
+public record SerialCommandResult(
+    bool Success,
+    string? StatusResponse = null,
+    string? Error = null);
+
+public class Command
+{
+    [JsonPropertyName("off")] public string Off { get; set; } = string.Empty;
+    [JsonPropertyName("on")] public string On { get; set; } = string.Empty;
 }

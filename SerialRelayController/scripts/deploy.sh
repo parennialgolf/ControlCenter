@@ -83,6 +83,16 @@ sudo mkdir -p "$PUBLISH_DIR"
 sudo cp -r publish/* "$PUBLISH_DIR/"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
+# ────────── ENSURE SQLITE DB PATH ──────────
+echo ""
+echo "====================================="
+echo "Ensuring Quartz DB directory exists and permissions are correct"
+echo "====================================="
+
+sudo mkdir -p "$TARGET_HOME/ControlCenter"
+sudo touch "$TARGET_HOME/ControlCenter/quartz.db"
+sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/ControlCenter"
+
 # ────────── WRITE SYSTEMD SERVICE FILE ──────────
 echo ""
 echo "====================================="
