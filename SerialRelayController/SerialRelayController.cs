@@ -1,10 +1,19 @@
 using System.IO.Ports;
-using System.Text.Json.Serialization;
 using Quartz;
 using SerialRelayController.Jobs;
-using Shared.Services;
 
 namespace SerialRelayController;
+
+public record LockerRelayStatus(int LockerNumber, bool IsOn);
+
+public record GetRelayResult(string SerialPort, int Channel);
+
+public record SerialCommandResult(
+    bool Success,
+    string? StatusResponse = null,
+    string? Error = null);
+
+public record Command(string On, string Off);
 
 public record UnlockDuration(int Delay);
 
@@ -29,7 +38,7 @@ public class SerialRelayController(
                 return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
 
             // Low-level confirmation
-            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel);
+            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: true);
 
             if (!result.Success)
                 return result;
@@ -54,15 +63,52 @@ public class SerialRelayController(
     }
 
     /// <summary>
-    /// Low-level: send ON and confirm by status response.
+    /// High-level Lock method:
+    /// 1. Map locker → board/channel
+    /// 2. Send OFF command and confirm
+    /// 3. Update cache
     /// </summary>
-    private static async Task<SerialCommandResult> SendToSerialWithConfirmation(string portPath, int channel)
+    public async Task<SerialCommandResult> Lock(int lockerNumber)
     {
         try
         {
-            var command = SerialRelayCommands.GetCommand(channel);
+            var relay = ports.GetRelay(lockerNumber);
+            if (!File.Exists(relay.SerialPort))
+                return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
+
+            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: false);
+
+            if (!result.Success)
+                return result;
+
+            cache.MarkLocked(lockerNumber);
+            Console.WriteLine($"✅ Relocked locker {lockerNumber} on {relay.SerialPort}");
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return new SerialCommandResult(false, Error: $"⚠️ Failed to relock locker {lockerNumber}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Low-level: send ON or OFF and confirm by echo response.
+    /// </summary>
+    private async Task<SerialCommandResult> SendToSerialWithConfirmation(
+        string portPath,
+        int channel,
+        bool isUnlock)
+    {
+        try
+        {
+            var command = ports.GetCommand(channel);
             if (command == null)
                 return new SerialCommandResult(false, Error: $"No command defined for channel {channel}.");
+
+            var cmd = (isUnlock ? command.On : command.Off)
+                .Replace("\\r", "\r")
+                .Replace("\\n", "\n");
 
             using var serialPort = new SerialPort(portPath, 9600, Parity.None, 8, StopBits.One);
             serialPort.ReadTimeout = 2000;
@@ -73,9 +119,8 @@ public class SerialRelayController(
             serialPort.DiscardInBuffer();
             serialPort.DiscardOutBuffer();
 
-            // Send ON
-            var onCmd = command.On.Replace("\\r", "\r").Replace("\\n", "\n");
-            serialPort.Write(onCmd);
+            // Send command
+            serialPort.Write(cmd);
 
             // Read echo
             string? response;
@@ -90,13 +135,13 @@ public class SerialRelayController(
 
             // Confirm echo matches
             var success = !string.IsNullOrWhiteSpace(response) &&
-                          response.Trim().Equals(onCmd.Trim(), StringComparison.OrdinalIgnoreCase);
+                          response.Trim().Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase);
 
             if (!success)
                 return new SerialCommandResult(
                     false,
                     StatusResponse: response,
-                    Error: "Relay did not echo back ON command correctly");
+                    Error: $"Relay did not echo back {(isUnlock ? "ON" : "OFF")} command correctly");
 
             return new SerialCommandResult(true, StatusResponse: response);
         }
@@ -109,19 +154,4 @@ public class SerialRelayController(
             await Task.CompletedTask;
         }
     }
-}
-
-public record LockerRelayStatus(int LockerNumber, bool IsOn);
-
-public record GetRelayResult(string SerialPort, int Channel);
-
-public record SerialCommandResult(
-    bool Success,
-    string? StatusResponse = null,
-    string? Error = null);
-
-public class Command
-{
-    [JsonPropertyName("off")] public string Off { get; set; } = string.Empty;
-    [JsonPropertyName("on")] public string On { get; set; } = string.Empty;
 }
