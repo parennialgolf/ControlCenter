@@ -2,24 +2,66 @@
 set -euo pipefail
 
 # ────────── CONFIG ──────────
-DOTNET_CHANNEL="LTS"
-DOTNET_INSTALL_DIR="/usr/share/dotnet"
-
-PROJECT_DIR="$(pwd)"
-PUBLISH_DIR="$PROJECT_DIR/publish"
-SERVICE_NAME="controlcenter.service"
+DOTNET_CHANNEL="9.0"                 # or "LTS"
+DOTNET_INSTALL_DIR="/opt/dotnet"
 SYSTEMD_DIR="/etc/systemd/system"
+
+SERVICE_NAME="controlcenter.service"
 SERVICE_FILE="$SYSTEMD_DIR/$SERVICE_NAME"
 
-install_dotnet_for_ubuntu_24_04() {
-    echo "⬇️ Adding dotnet/backports PPA and installing dotnet-sdk-9.0…"
-    sudo add-apt-repository -y ppa:dotnet/backports
-    sudo apt-get update -y
-    sudo apt-get install -y dotnet-sdk-9.0
-}
+TARGET_USER="user"
+TARGET_HOME="/home/$TARGET_USER"
+PROJECT_DIR="$TARGET_HOME/ControlCenter/ControlCenter"
+PUBLISH_DIR="$PROJECT_DIR/publish"
 
-install_dotnet_portable() {
-    echo "⬇️ Installing .NET via dotnet-install.sh (channel=$DOTNET_CHANNEL)…"
+ARCH=$(uname -m)
+
+# ────────── DETECT RUNTIME ──────────
+if [[ "$ARCH" == "x86_64" ]]; then
+    RUNTIME="linux-x64"
+elif [[ "$ARCH" == "aarch64" ]]; then
+    RUNTIME="linux-arm64"
+elif [[ "$ARCH" == "armv7l" ]]; then
+    RUNTIME="linux-arm"
+else
+    echo "❌ Unsupported architecture: $ARCH"
+    exit 1
+fi
+
+echo "Detected architecture: $ARCH → runtime: $RUNTIME"
+
+# ────────── ENSURE TARGET USER ──────────
+if ! id "$TARGET_USER" &>/dev/null; then
+    echo "👤 Creating system user '$TARGET_USER'..."
+    sudo adduser --system --group --home "$TARGET_HOME" "$TARGET_USER"
+fi
+
+# ────────── INSTALL / UPDATE DOTNET ──────────
+echo ""
+echo "====================================="
+echo "Checking .NET SDK"
+echo "====================================="
+
+INSTALLED_DOTNET_VER=""
+if command -v dotnet &>/dev/null; then
+    INSTALLED_DOTNET_VER=$(dotnet --version)
+    echo "✅ Found dotnet SDK: $INSTALLED_DOTNET_VER"
+else
+    echo "⚠️ dotnet not found"
+fi
+
+LATEST_DOTNET_VER=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
+    | grep -Po '"latest-sdk":\s*"\K[^"]+' | head -n1)
+
+if [[ -z "$LATEST_DOTNET_VER" ]]; then
+    echo "❌ Could not determine latest .NET version for channel $DOTNET_CHANNEL"
+    exit 1
+fi
+
+echo "ℹ️ Latest $DOTNET_CHANNEL SDK available: $LATEST_DOTNET_VER"
+
+if [[ "$INSTALLED_DOTNET_VER" != "$LATEST_DOTNET_VER" ]]; then
+    echo "⬆️ Installing/updating dotnet SDK to $LATEST_DOTNET_VER"
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
     sudo bash "$TMP_SCRIPT" \
@@ -27,43 +69,33 @@ install_dotnet_portable() {
         --install-dir "$DOTNET_INSTALL_DIR" \
         --quality ga
     rm -f "$TMP_SCRIPT"
-    export PATH="$PATH:$DOTNET_INSTALL_DIR"
-    if ! grep -q "$DOTNET_INSTALL_DIR" /etc/profile &>/dev/null; then
-        echo "export PATH=\"\$PATH:$DOTNET_INSTALL_DIR\"" \
-            | sudo tee /etc/profile.d/dotnet.sh >/dev/null
-    fi
-}
 
-# ────────── ENSURE SDK ──────────
-echo ""
-echo "====================================="
-echo "Checking .NET SDK"
-echo "====================================="
-
-if ! command -v dotnet >/dev/null 2>&1; then
-    echo "⚠️ dotnet SDK not found – determining best install method…"
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        if [[ "$ID" == "ubuntu" && "$VERSION_ID" == "24.04" ]]; then
-            install_dotnet_for_ubuntu_24_04
-        else
-            install_dotnet_portable
-        fi
-    else
-        install_dotnet_portable
+    if [[ ! -L /usr/local/bin/dotnet ]]; then
+        sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
     fi
-    echo "✅ dotnet SDK installed: $(dotnet --version)"
+
+    echo "✅ dotnet installed/updated: $(dotnet --version)"
 else
-    echo "✅ dotnet SDK detected: $(dotnet --version)"
+    echo "✅ dotnet is already up to date ($INSTALLED_DOTNET_VER)"
 fi
 
 # ────────── BUILD & PUBLISH ──────────
 echo ""
 echo "====================================="
-echo "Publishing ControlCenter to $PUBLISH_DIR"
+echo "Publishing ControlCenter"
 echo "====================================="
 
-dotnet publish -c Release -r linux-x64 --self-contained false -o "$PUBLISH_DIR"
+dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "publish"
+
+# ────────── COPY TO TARGET DIRECTORY ──────────
+echo ""
+echo "====================================="
+echo "Copying files to $PUBLISH_DIR"
+echo "====================================="
+
+sudo mkdir -p "$PUBLISH_DIR"
+sudo cp -r publish/* "$PUBLISH_DIR/"
+sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
 # ────────── WRITE SYSTEMD SERVICE FILE ──────────
 echo ""
@@ -78,21 +110,17 @@ After=network.target
 
 [Service]
 WorkingDirectory=$PUBLISH_DIR
-ExecStart=/usr/bin/dotnet $PUBLISH_DIR/ControlCenter.dll
+ExecStart=/usr/local/bin/dotnet $PUBLISH_DIR/ControlCenter.dll
 
-# Always restart on crash
 Restart=always
 RestartSec=5
 
-# Run as 'user' (change this if needed)
-User=user
-
-# Capabilities: allow non-root to bind port 80
+User=$TARGET_USER
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
-# Environment variables for runtime config
-Environment=SERIAL_RELAY_CONTROLLER_HOST=10.1.10.150
-Environment=SERIAL_RELAY_CONTROLLER_PORT=5000
+# Environment variables
+Environment=SERIAL_RELAY_CONTROLLER_HOST=pgl-1-lockers
+Environment=SERIAL_RELAY_CONTROLLER_PORT=5001
 Environment=USE_LEGACY_LOCKER_API=true
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
