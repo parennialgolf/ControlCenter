@@ -75,3 +75,5 @@ artifacts/
 .DS_Store
 .AppleDouble
 .LSOverride 
+
+/publish
