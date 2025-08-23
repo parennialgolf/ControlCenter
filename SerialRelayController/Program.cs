@@ -2,7 +2,6 @@ using Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel to use port 5021
 builder.WebHost.UseUrls("http://localhost:5001");
 
 var app = builder.Build();

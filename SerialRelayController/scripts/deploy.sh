@@ -6,13 +6,15 @@ DOTNET_CHANNEL="9.0"
 DOTNET_INSTALL_DIR="/opt/dotnet"
 SYSTEMD_DIR="/etc/systemd/system"
 
-PROJECT_DIR="$(pwd)"
-PUBLISH_DIR="$PROJECT_DIR/publish"
-SERVICE_TEMPLATE="$PROJECT_DIR/scripts/serialrelaycontroller.service"
-SERVICE_FILE="$SYSTEMD_DIR/serialrelaycontroller.service"
 SERVICE_NAME="serialrelaycontroller.service"
+SERVICE_FILE="$SYSTEMD_DIR/$SERVICE_NAME"
 
-CURRENT_USER=$(whoami)
+# Always use the dedicated 'user' account
+TARGET_USER="user"
+TARGET_HOME="/home/$TARGET_USER"
+PROJECT_DIR="$TARGET_HOME/ControlCenter/SerialRelayController"
+PUBLISH_DIR="$PROJECT_DIR/publish"
+
 ARCH=$(uname -m)
 
 # ────────── DETECT RUNTIME ──────────
@@ -29,6 +31,12 @@ fi
 
 echo "Detected architecture: $ARCH → runtime: $RUNTIME"
 
+# ────────── ENSURE TARGET USER EXISTS ──────────
+if ! id "$TARGET_USER" &>/dev/null; then
+    echo "Creating system user '$TARGET_USER'..."
+    sudo adduser --system --group --home "$TARGET_HOME" "$TARGET_USER"
+fi
+
 # ────────── INSTALL DOTNET IF MISSING ──────────
 if ! command -v dotnet &>/dev/null; then
     echo "dotnet not found — installing to $DOTNET_INSTALL_DIR"
@@ -43,9 +51,8 @@ if ! command -v dotnet &>/dev/null; then
 
     rm -f "$TMP_SCRIPT"
 
-    # Symlink for convenience
-    if [[ ! -L /usr/bin/dotnet ]]; then
-        sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/bin/dotnet
+    if [[ ! -L /usr/local/bin/dotnet ]]; then
+        sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
     fi
 
     echo "dotnet installed: $(dotnet --version)"
@@ -56,19 +63,50 @@ fi
 # ────────── BUILD & PUBLISH ──────────
 echo ""
 echo "====================================="
-echo "Publishing SerialRelayController to $PUBLISH_DIR"
+echo "Publishing SerialRelayController"
 echo "====================================="
 
-dotnet publish -c Release -r $RUNTIME --self-contained false -o "$PUBLISH_DIR"
+dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "publish"
 
-# ────────── DEPLOY SYSTEMD SERVICE FILE ──────────
+# ────────── COPY TO TARGET DIRECTORY ──────────
+echo ""
+echo "====================================="
+echo "Copying files to $PUBLISH_DIR"
+echo "====================================="
+
+sudo mkdir -p "$PUBLISH_DIR"
+sudo cp -r publish/* "$PUBLISH_DIR/"
+sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
+
+# ────────── WRITE SYSTEMD SERVICE FILE ──────────
 echo ""
 echo "====================================="
 echo "Deploying service file to $SERVICE_FILE"
 echo "====================================="
 
-# Replace {{USER}} and {{PROJECT_DIR}} in service template
-sed "s|{{USER}}|$CURRENT_USER|g; s|{{PROJECT_DIR}}|$PROJECT_DIR|g" "$SERVICE_TEMPLATE" | sudo tee "$SERVICE_FILE" > /dev/null
+sudo tee "$SERVICE_FILE" >/dev/null <<EOF
+[Unit]
+Description=SerialRelayController .NET Service
+After=network.target
+
+[Service]
+WorkingDirectory=$PUBLISH_DIR
+ExecStart=/usr/local/bin/dotnet $PUBLISH_DIR/SerialRelayController.dll
+
+Restart=always
+RestartSec=5
+
+User=$TARGET_USER
+
+Environment=SERIAL_RELAY_CONTROLLER_PORT=5001
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
+
+SyslogIdentifier=serialrelaycontroller
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 # ────────── RELOAD SYSTEMD & START SERVICE ──────────
 echo ""
