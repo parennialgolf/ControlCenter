@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace Shared;
+namespace ControlCenter;
 
 public enum ProjectorStatusType
 {

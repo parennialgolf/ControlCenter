@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
-namespace Shared.Models;
+
+namespace ControlCenter.Models;
 
 [XmlRoot("datavalues")]
 public class DeviceStatus
@@ -45,8 +46,7 @@ public class DeviceStatus
     [XmlElement("timezoneOffset")]
     public int TimezoneOffset { get; set; }
 
-    [XmlElement("serialNumber")]
-    public string SerialNumber { get; set; }
+    [XmlElement("serialNumber")] public string SerialNumber { get; set; }
 
     [JsonConverter(typeof(IntFromStringConverter))]
     [XmlElement("minRecRefresh")]

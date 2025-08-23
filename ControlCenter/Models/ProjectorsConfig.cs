@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Shared.Models;
+namespace ControlCenter.Models;
 
 public class ProjectorsConfig
 {
@@ -17,7 +17,7 @@ public class RegisteredProjector
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ProjectorProtocolType Protocol { get; set; }
-    
+
     public RegisteredProjector(int id, string name, string ipAddress, ProjectorProtocolType protocol)
     {
         Id = id;
@@ -25,9 +25,8 @@ public class RegisteredProjector
         IpAddress = ipAddress;
         Protocol = protocol;
     }
-    
+
     public RegisteredProjector()
     {
-        
     }
 }

@@ -1,4 +1,4 @@
-namespace ControlCenter;
+namespace ControlCenter.Services;
 
 public static class ControlByWebRelayCommands
 {

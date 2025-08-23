@@ -1,9 +1,10 @@
 using System.Text.Json;
 using System.Xml.Serialization;
+using ControlCenter.Models;
 using Microsoft.Extensions.Options;
 using Shared.Models;
 
-namespace ControlCenter;
+namespace ControlCenter.Services;
 
 public class ControlByWebRelayController(
     IOptionsMonitor<DoorsConfig> config,
@@ -15,7 +16,7 @@ public class ControlByWebRelayController(
     {
         try
         {
-            if (_doors.Managed == false)
+            if (!_doors.Managed)
                 return DoorsCommandResult.FailureResult("Doors are not managed.", doorNumber);
 
             if (doorNumber < 1 || doorNumber > _doors.Max)
