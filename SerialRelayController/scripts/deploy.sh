@@ -37,6 +37,11 @@ if ! id "$TARGET_USER" &>/dev/null; then
     sudo adduser --system --group --home "$TARGET_HOME" "$TARGET_USER"
 fi
 
+# Always ensure the user is in the right groups
+echo "Adding $TARGET_USER to dialout and plugdev groups..."
+sudo usermod -a -G dialout "$TARGET_USER"
+sudo usermod -a -G plugdev "$TARGET_USER"
+
 # ────────── INSTALL DOTNET IF MISSING ──────────
 if ! command -v dotnet &>/dev/null; then
     echo "dotnet not found — installing to $DOTNET_INSTALL_DIR"
@@ -101,6 +106,7 @@ User=$TARGET_USER
 Environment=SERIAL_RELAY_CONTROLLER_PORT=5001
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5001
 
 SyslogIdentifier=serialrelaycontroller
 
