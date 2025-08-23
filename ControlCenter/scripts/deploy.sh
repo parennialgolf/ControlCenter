@@ -2,6 +2,8 @@
 set -euo pipefail
 
 # ────────── CONFIG ──────────
+LOCKER_HOST="pgl-2-lockers"
+
 DOTNET_CHANNEL="9.0"                 # or "LTS"
 DOTNET_INSTALL_DIR="/opt/dotnet"
 SYSTEMD_DIR="/etc/systemd/system"
@@ -119,8 +121,7 @@ User=$TARGET_USER
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 # Environment variables
-Environment=SERIAL_RELAY_CONTROLLER_HOST=pgl-1-lockers
-Environment=SERIAL_RELAY_CONTROLLER_PORT=5001
+Environment=SERIAL_RELAY_CONTROLLER_HOST=$LOCKER_HOST
 Environment=USE_LEGACY_LOCKER_API=true
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
