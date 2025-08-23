@@ -15,6 +15,10 @@ TARGET_HOME="/home/$TARGET_USER"
 PROJECT_DIR="$TARGET_HOME/ControlCenter/SerialRelayController"
 PUBLISH_DIR="$PROJECT_DIR/publish"
 
+# Quartz persistence
+QUARTZ_DB="$TARGET_HOME/ControlCenter/quartz.db"
+QUARTZ_SCHEMA_URL="https://raw.githubusercontent.com/quartznet/quartznet/main/database/tables/tables_sqlite.sql"
+
 ARCH=$(uname -m)
 
 # ────────── DETECT RUNTIME ──────────
@@ -65,6 +69,13 @@ else
     echo "dotnet SDK detected: $(dotnet --version)"
 fi
 
+# ────────── INSTALL SQLITE IF MISSING ──────────
+if ! command -v sqlite3 &>/dev/null; then
+    echo "Installing sqlite3..."
+    sudo apt-get update -y
+    sudo apt-get install -y sqlite3
+fi
+
 # ────────── BUILD & PUBLISH ──────────
 echo ""
 echo "====================================="
@@ -83,15 +94,27 @@ sudo mkdir -p "$PUBLISH_DIR"
 sudo cp -r publish/* "$PUBLISH_DIR/"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
-# ────────── ENSURE SQLITE DB PATH ──────────
+# ────────── ENSURE QUARTZ DB & SCHEMA ──────────
 echo ""
 echo "====================================="
-echo "Ensuring Quartz DB directory exists and permissions are correct"
+echo "Ensuring Quartz schema exists in $QUARTZ_DB"
 echo "====================================="
 
-sudo mkdir -p "$TARGET_HOME/ControlCenter"
-sudo touch "$TARGET_HOME/ControlCenter/quartz.db"
-sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/ControlCenter"
+if [[ ! -f "$QUARTZ_DB" ]]; then
+    echo "Creating Quartz DB at $QUARTZ_DB"
+    sudo -u "$TARGET_USER" touch "$QUARTZ_DB"
+fi
+
+TMP_SCHEMA="$(mktemp)"
+curl -sSL "$QUARTZ_SCHEMA_URL" -o "$TMP_SCHEMA"
+
+# Apply schema (ignore errors if tables already exist)
+sudo -u "$TARGET_USER" sqlite3 "$QUARTZ_DB" < "$TMP_SCHEMA" || true
+rm -f "$TMP_SCHEMA"
+
+# Fix ownership & perms
+sudo chown "$TARGET_USER:$TARGET_USER" "$QUARTZ_DB"
+sudo chmod 664 "$QUARTZ_DB"
 
 # ────────── WRITE SYSTEMD SERVICE FILE ──────────
 echo ""
