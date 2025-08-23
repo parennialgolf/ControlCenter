@@ -33,24 +33,47 @@ else
     exit 1
 fi
 
-echo "✅ Detected architecture: $ARCH → runtime: $RUNTIME"
+echo "Detected architecture: $ARCH → runtime: $RUNTIME"
 
 # ────────── ENSURE TARGET USER EXISTS ──────────
 if ! id "$TARGET_USER" &>/dev/null; then
     echo "👤 Creating system user '$TARGET_USER'..."
     sudo adduser --system --group --home "$TARGET_HOME" "$TARGET_USER"
-else
-    echo "👤 User '$TARGET_USER' already exists"
 fi
 
 # Always ensure the user is in the right groups
-echo "🔧 Adding $TARGET_USER to dialout and plugdev groups..."
+echo "👤 Adding $TARGET_USER to dialout and plugdev groups..."
 sudo usermod -a -G dialout "$TARGET_USER"
 sudo usermod -a -G plugdev "$TARGET_USER"
 
-# ────────── INSTALL DOTNET IF MISSING ──────────
-if ! command -v dotnet &>/dev/null; then
-    echo "📦 dotnet not found — installing to $DOTNET_INSTALL_DIR"
+# ────────── INSTALL / UPDATE DOTNET ──────────
+echo ""
+echo "====================================="
+echo "Checking .NET SDK"
+echo "====================================="
+
+INSTALLED_DOTNET_VER=""
+if command -v dotnet &>/dev/null; then
+    INSTALLED_DOTNET_VER=$(dotnet --version)
+    echo "✅ Found dotnet SDK: $INSTALLED_DOTNET_VER"
+else
+    echo "⚠️ dotnet not found"
+fi
+
+# Get latest available version for this channel from Microsoft
+LATEST_DOTNET_VER=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
+    | grep -Po '"latest-sdk":\s*"\K[^"]+' | head -n1)
+
+if [[ -z "$LATEST_DOTNET_VER" ]]; then
+    echo "❌ Could not determine latest .NET version for channel $DOTNET_CHANNEL"
+    exit 1
+fi
+
+echo "ℹ️ Latest $DOTNET_CHANNEL SDK available: $LATEST_DOTNET_VER"
+
+# Compare versions
+if [[ "$INSTALLED_DOTNET_VER" != "$LATEST_DOTNET_VER" ]]; then
+    echo "⬆️ Installing/updating dotnet SDK to $LATEST_DOTNET_VER"
 
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
@@ -66,24 +89,24 @@ if ! command -v dotnet &>/dev/null; then
         sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
     fi
 
-    echo "✅ dotnet installed: $(dotnet --version)"
+    echo "✅ dotnet installed/updated: $(dotnet --version)"
 else
-    echo "✅ dotnet SDK detected: $(dotnet --version)"
+    echo "✅ dotnet is already up to date ($INSTALLED_DOTNET_VER)"
 fi
 
-# ────────── CHECK / INSTALL SQLITE ──────────
+# ────────── INSTALL SQLITE IF MISSING ──────────
 echo ""
 echo "====================================="
-echo "Checking for sqlite3"
+echo "Checking sqlite3"
 echo "====================================="
 
-if command -v sqlite3 &>/dev/null; then
-    echo "✅ sqlite3 is already installed: $(sqlite3 --version)"
-else
-    echo "📦 sqlite3 not found — installing..."
+if ! command -v sqlite3 &>/dev/null; then
+    echo "⬇️ Installing sqlite3..."
     sudo apt-get update -y
     sudo apt-get install -y sqlite3
     echo "✅ sqlite3 installed: $(sqlite3 --version)"
+else
+    echo "✅ sqlite3 detected: $(sqlite3 --version)"
 fi
 
 # ────────── BUILD & PUBLISH ──────────
@@ -107,26 +130,20 @@ sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 # ────────── ENSURE QUARTZ DB & SCHEMA ──────────
 echo ""
 echo "====================================="
-echo "Ensuring Quartz DB & schema at $QUARTZ_DB"
+echo "Ensuring Quartz schema exists in $QUARTZ_DB"
 echo "====================================="
 
-if [[ -f "$QUARTZ_DB" ]]; then
-    echo "✅ Quartz DB already exists at $QUARTZ_DB"
-else
-    echo "📂 Creating new Quartz DB at $QUARTZ_DB"
+if [[ ! -f "$QUARTZ_DB" ]]; then
+    echo "📂 Creating Quartz DB at $QUARTZ_DB"
     sudo -u "$TARGET_USER" touch "$QUARTZ_DB"
 fi
 
-echo "⬇️  Downloading Quartz schema..."
 TMP_SCHEMA="$(mktemp)"
 curl -sSL "$QUARTZ_SCHEMA_URL" -o "$TMP_SCHEMA"
 
-echo "📦 Applying schema to $QUARTZ_DB (errors ignored if already applied)..."
-if sudo -u "$TARGET_USER" sqlite3 "$QUARTZ_DB" < "$TMP_SCHEMA"; then
-    echo "✅ Quartz schema applied successfully"
-else
-    echo "⚠️ Some schema commands failed (tables may already exist)"
-fi
+# Apply schema (ignore errors if tables already exist)
+echo "📜 Applying Quartz schema..."
+sudo -u "$TARGET_USER" sqlite3 "$QUARTZ_DB" < "$TMP_SCHEMA" || true
 rm -f "$TMP_SCHEMA"
 
 # Fix ownership & perms
