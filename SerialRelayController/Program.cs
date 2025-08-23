@@ -15,14 +15,21 @@ builder.Services.AddTransient<SerialPorts>();
 // Quartz with SQLite
 builder.Services.AddQuartz(q =>
 {
-    // Persistent job store in SQLite
-    q.UsePersistentStore(store =>
+    if (builder.Environment.IsDevelopment())
     {
-        store.UseProperties = true;
-        store.UseSystemTextJsonSerializer();
+        q.UseInMemoryStore();
+    }
+    else
+    {
+        // Persistent job store in SQLite
+        q.UsePersistentStore(store =>
+        {
+            store.UseProperties = true;
+            store.UseSystemTextJsonSerializer();
 
-        store.UseSQLite(sqlite => sqlite.ConnectionString = "Data Source=/home/user/ControlCenter/quartz.db;");
-    });
+            store.UseSQLite(sqlite => sqlite.ConnectionString = "Data Source=/home/user/ControlCenter/quartz.db;");
+        });
+    }
 });
 
 builder.Services.AddQuartzHostedService(opt => { opt.WaitForJobsToComplete = true; });
