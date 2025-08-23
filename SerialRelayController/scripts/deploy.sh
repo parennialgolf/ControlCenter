@@ -29,26 +29,28 @@ elif [[ "$ARCH" == "aarch64" ]]; then
 elif [[ "$ARCH" == "armv7l" ]]; then
     RUNTIME="linux-arm"
 else
-    echo "Unsupported architecture: $ARCH"
+    echo "❌ Unsupported architecture: $ARCH"
     exit 1
 fi
 
-echo "Detected architecture: $ARCH → runtime: $RUNTIME"
+echo "✅ Detected architecture: $ARCH → runtime: $RUNTIME"
 
 # ────────── ENSURE TARGET USER EXISTS ──────────
 if ! id "$TARGET_USER" &>/dev/null; then
-    echo "Creating system user '$TARGET_USER'..."
+    echo "👤 Creating system user '$TARGET_USER'..."
     sudo adduser --system --group --home "$TARGET_HOME" "$TARGET_USER"
+else
+    echo "👤 User '$TARGET_USER' already exists"
 fi
 
 # Always ensure the user is in the right groups
-echo "Adding $TARGET_USER to dialout and plugdev groups..."
+echo "🔧 Adding $TARGET_USER to dialout and plugdev groups..."
 sudo usermod -a -G dialout "$TARGET_USER"
 sudo usermod -a -G plugdev "$TARGET_USER"
 
 # ────────── INSTALL DOTNET IF MISSING ──────────
 if ! command -v dotnet &>/dev/null; then
-    echo "dotnet not found — installing to $DOTNET_INSTALL_DIR"
+    echo "📦 dotnet not found — installing to $DOTNET_INSTALL_DIR"
 
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
@@ -64,16 +66,24 @@ if ! command -v dotnet &>/dev/null; then
         sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
     fi
 
-    echo "dotnet installed: $(dotnet --version)"
+    echo "✅ dotnet installed: $(dotnet --version)"
 else
-    echo "dotnet SDK detected: $(dotnet --version)"
+    echo "✅ dotnet SDK detected: $(dotnet --version)"
 fi
 
-# ────────── INSTALL SQLITE IF MISSING ──────────
-if ! command -v sqlite3 &>/dev/null; then
-    echo "Installing sqlite3..."
+# ────────── CHECK / INSTALL SQLITE ──────────
+echo ""
+echo "====================================="
+echo "Checking for sqlite3"
+echo "====================================="
+
+if command -v sqlite3 &>/dev/null; then
+    echo "✅ sqlite3 is already installed: $(sqlite3 --version)"
+else
+    echo "📦 sqlite3 not found — installing..."
     sudo apt-get update -y
     sudo apt-get install -y sqlite3
+    echo "✅ sqlite3 installed: $(sqlite3 --version)"
 fi
 
 # ────────── BUILD & PUBLISH ──────────
@@ -97,19 +107,26 @@ sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 # ────────── ENSURE QUARTZ DB & SCHEMA ──────────
 echo ""
 echo "====================================="
-echo "Ensuring Quartz schema exists in $QUARTZ_DB"
+echo "Ensuring Quartz DB & schema at $QUARTZ_DB"
 echo "====================================="
 
-if [[ ! -f "$QUARTZ_DB" ]]; then
-    echo "Creating Quartz DB at $QUARTZ_DB"
+if [[ -f "$QUARTZ_DB" ]]; then
+    echo "✅ Quartz DB already exists at $QUARTZ_DB"
+else
+    echo "📂 Creating new Quartz DB at $QUARTZ_DB"
     sudo -u "$TARGET_USER" touch "$QUARTZ_DB"
 fi
 
+echo "⬇️  Downloading Quartz schema..."
 TMP_SCHEMA="$(mktemp)"
 curl -sSL "$QUARTZ_SCHEMA_URL" -o "$TMP_SCHEMA"
 
-# Apply schema (ignore errors if tables already exist)
-sudo -u "$TARGET_USER" sqlite3 "$QUARTZ_DB" < "$TMP_SCHEMA" || true
+echo "📦 Applying schema to $QUARTZ_DB (errors ignored if already applied)..."
+if sudo -u "$TARGET_USER" sqlite3 "$QUARTZ_DB" < "$TMP_SCHEMA"; then
+    echo "✅ Quartz schema applied successfully"
+else
+    echo "⚠️ Some schema commands failed (tables may already exist)"
+fi
 rm -f "$TMP_SCHEMA"
 
 # Fix ownership & perms
