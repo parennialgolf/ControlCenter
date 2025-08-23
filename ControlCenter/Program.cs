@@ -12,9 +12,6 @@ using Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel to use port 5021
-builder.WebHost.UseUrls($"http://localhost:{builder.Configuration.GetValue<int>("CONTROL_CENTER_PORT")}");
-
 builder.Services.AddHttpClient<ControlByWebRelayController>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 builder.Configuration.AddJsonFile("config.json", optional: false, reloadOnChange: true);
@@ -38,8 +35,6 @@ if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
-
-// app.UseHttpsRedirection();
 
 app.MapPost("/doors/{doorNumber:int}/pulse", async (int doorNumber, ControlByWebRelayController controller) =>
 {
@@ -112,8 +107,7 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         }
         else
         {
-            var forwardUrl =
-                $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/{lockerNumber}/unlock";
+            var forwardUrl = $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}/lockers/{lockerNumber}/unlock";
 
             var response = await httpClient.PostAsync(forwardUrl, null);
             var body = await response.Content.ReadAsStringAsync();
