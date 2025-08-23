@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Quartz;
 using SerialRelayController;
 
@@ -13,9 +14,9 @@ builder.Services.AddQuartz(q =>
     q.UsePersistentStore(store =>
     {
         store.UseProperties = true;
-#pragma warning disable CS0618
-        store.UseJsonSerializer(); // System.Text.Json, safe for primitives
-#pragma warning restore CS0618
+// #pragma warning disable CS0618
+//         store.UseJsonSerializer(); // System.Text.Json, safe for primitives
+// #pragma warning restore CS0618
 
         store.UseSQLite(sqlite => { sqlite.ConnectionString = "Data Source=/home/user/quartz.db;"; });
     });
@@ -27,11 +28,13 @@ var app = builder.Build();
 
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         int lockerNumber,
-        SerialRelayController.SerialRelayController relay) =>
+        SerialRelayController.SerialRelayController relay,
+        [FromBody] UnlockDuration? duration = null) =>
     {
         try
         {
-            var result = await relay.Unlock(lockerNumber);
+            duration ??= new UnlockDuration(10);
+            var result = await relay.Unlock(lockerNumber, duration);
 
             Console.WriteLine(result.Success
                 ? $"Successfully opened lockerNumber: {lockerNumber}"
@@ -66,41 +69,42 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
     .WithDescription(
         "Unlocks a locker by sending ON, verifying status, then OFF. Returns 200 OK if the relay reports ON, otherwise 400.");
 
-app.MapGet("/lockers/{lockerNumber:int}/status",
-        (int lockerNumber, SerialRelayController.SerialRelayController relay) =>
+app.MapGet("/lockers/{lockerNumber:int}/status", (
+        int lockerNumber,
+        SerialRelayController.SerialRelayController relay) =>
+    {
+        try
         {
-            try
+            var statuses = relay.GetAllStatuses();
+
+            var lockerStatus = statuses.FirstOrDefault(s => s.LockerNumber == lockerNumber);
+
+            if (lockerStatus == null)
             {
-                var statuses = relay.GetAllStatuses();
-
-                var lockerStatus = statuses.FirstOrDefault(s => s.LockerNumber == lockerNumber);
-
-                if (lockerStatus == null)
-                {
-                    return Results.NotFound(new
-                    {
-                        lockerNumber,
-                        status = "Unknown",
-                        error = $"No status available for locker {lockerNumber}"
-                    });
-                }
-
-                return Results.Ok(new
+                return Results.NotFound(new
                 {
                     lockerNumber,
-                    status = lockerStatus.IsOn ? "Unlocked" : "Locked"
+                    status = "Unknown",
+                    error = $"No status available for locker {lockerNumber}"
                 });
             }
-            catch (Exception ex)
+
+            return Results.Ok(new
             {
-                return Results.BadRequest(new
-                {
-                    lockerNumber,
-                    status = "Failed",
-                    error = ex.Message
-                });
-            }
-        })
+                lockerNumber,
+                status = lockerStatus.IsOn ? "Unlocked" : "Locked"
+            });
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new
+            {
+                lockerNumber,
+                status = "Failed",
+                error = ex.Message
+            });
+        }
+    })
     .WithName("LockerStatus");
 
 app.MapGet("/lockers/status", (SerialRelayController.SerialRelayController relay) =>

@@ -8,14 +8,15 @@ namespace SerialRelayController.Jobs;
 /// </summary>
 public class LockJob(LockerStateCache cache) : IJob
 {
+    private const string Key = "LockerNumber";
+
     /// <summary>
     /// Build a Quartz JobDetail for a given locker number.
     /// </summary>
-    public static IJobDetail BuildJob(int lockerNumber)
+    public static IJobDetail BuildJob()
     {
         return JobBuilder.Create<LockJob>()
-            .WithIdentity($"lock-job-{lockerNumber}", "lockers")
-            .UsingJobData("lockerNumber", lockerNumber)
+            .WithIdentity($"lock-job", "lockers")
             .Build();
     }
 
@@ -26,13 +27,14 @@ public class LockJob(LockerStateCache cache) : IJob
     {
         return TriggerBuilder.Create()
             .WithIdentity($"lock-trigger-{lockerNumber}", "lockers")
+            .UsingJobData(Key, lockerNumber)
             .StartAt(DateBuilder.FutureDate(delaySeconds, IntervalUnit.Second))
             .Build();
     }
 
     public async Task Execute(IJobExecutionContext context)
     {
-        var lockerNumber = context.MergedJobDataMap.GetInt("lockerNumber");
+        var lockerNumber = context.MergedJobDataMap.GetInt(Key);
 
         try
         {

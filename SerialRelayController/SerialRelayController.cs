@@ -6,24 +6,20 @@ using Shared;
 
 namespace SerialRelayController;
 
+public record UnlockDuration(int Delay);
+
 public class LockerStateCache
 {
     private readonly ConcurrentDictionary<int, bool> _states = new();
 
     public void MarkUnlocked(int lockerNumber)
-    {
-        _states[lockerNumber] = true;
-    }
+        => _states[lockerNumber] = true;
 
     public void MarkLocked(int lockerNumber)
-    {
-        _states[lockerNumber] = false;
-    }
+        => _states[lockerNumber] = false;
 
     public bool IsUnlocked(int lockerNumber)
-    {
-        return _states.TryGetValue(lockerNumber, out var state) && state;
-    }
+        => _states.TryGetValue(lockerNumber, out var state) && state;
 }
 
 public class SerialRelayController(
@@ -75,7 +71,7 @@ public class SerialRelayController(
     /// Unlock a locker by sending ON, confirming echo, scheduling OFF,
     /// and updating the soft latch cache.
     /// </summary>
-    public async Task<SerialCommandResult> Unlock(int lockerNumber)
+    public async Task<SerialCommandResult> Unlock(int lockerNumber, UnlockDuration duration)
     {
         var portIndex = (lockerNumber - 1) / ChannelsPerBoard;
         var channel = (lockerNumber - 1) % ChannelsPerBoard + 1;
@@ -127,8 +123,8 @@ public class SerialRelayController(
             cache.MarkUnlocked(lockerNumber);
 
             var scheduler = await factory.GetScheduler();
-            var job = LockJob.BuildJob(lockerNumber);
-            var trigger = LockJob.BuildTrigger(lockerNumber, 10); // 10 sec delay
+            var job = LockJob.BuildJob();
+            var trigger = LockJob.BuildTrigger(lockerNumber, duration.Delay); // 10 sec delay
 
             await scheduler.ScheduleJob(job, trigger);
 
