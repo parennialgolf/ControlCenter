@@ -6,7 +6,7 @@ namespace SerialRelayController.Jobs;
 /// <summary>
 /// Quartz job that sends the OFF command to a relay, marking a locker as locked again.
 /// </summary>
-public class LockJob(SerialRelayController controller) : IJob
+public class LockJob(PortController portController) : IJob
 {
     private const string Key = "LockerNumber";
 
@@ -35,6 +35,6 @@ public class LockJob(SerialRelayController controller) : IJob
     public async Task Execute(IJobExecutionContext context)
     {
         var lockerNumber = context.MergedJobDataMap.GetInt(Key);
-        await controller.Lock(lockerNumber);
+        await portController.Lock(lockerNumber);
     }
 }

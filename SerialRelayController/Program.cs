@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<SerialPortOptions>(
     builder.Configuration.GetSection("SerialPortOptions"));
 
-builder.Services.AddTransient<SerialRelayController.SerialRelayController>();
+builder.Services.AddTransient<PortController>();
 builder.Services.AddSingleton<LockerStateCache>();
 builder.Services.AddTransient<SerialPorts>();
 
@@ -38,7 +38,7 @@ var app = builder.Build();
 
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         int lockerNumber,
-        SerialRelayController.SerialRelayController relay,
+        PortController relay,
         [FromBody] UnlockDuration? duration = null) =>
     {
         try

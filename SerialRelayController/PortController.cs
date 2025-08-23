@@ -22,7 +22,7 @@ public class Command
 
 public record UnlockDuration(int Delay);
 
-public class Controller(
+public class PortController(
     SerialPorts ports,
     LockerStateCache cache,
     ISchedulerFactory factory)
