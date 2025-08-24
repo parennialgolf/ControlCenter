@@ -9,130 +9,80 @@ SYSTEMD_DIR="/etc/systemd/system"
 SERVICE_NAME="serialrelaycontroller.service"
 SERVICE_FILE="$SYSTEMD_DIR/$SERVICE_NAME"
 
-# Always use the dedicated 'user' account
 TARGET_USER="user"
 TARGET_HOME="/home/$TARGET_USER"
 PROJECT_DIR="$TARGET_HOME/ControlCenter/SerialRelayController"
 PUBLISH_DIR="$PROJECT_DIR/publish"
 
-# Quartz persistence
 QUARTZ_DB="$TARGET_HOME/ControlCenter/quartz.db"
 QUARTZ_SCHEMA_URL="https://raw.githubusercontent.com/quartznet/quartznet/main/database/tables/tables_sqlite.sql"
 
 ARCH=$(uname -m)
 
 # ────────── DETECT RUNTIME ──────────
-if [[ "$ARCH" == "x86_64" ]]; then
-    RUNTIME="linux-x64"
-elif [[ "$ARCH" == "aarch64" ]]; then
-    RUNTIME="linux-arm64"
-elif [[ "$ARCH" == "armv7l" ]]; then
-    RUNTIME="linux-arm"
-else
-    echo "❌ Unsupported architecture: $ARCH"
-    exit 1
-fi
+case "$ARCH" in
+    x86_64)   RUNTIME="linux-x64" ;;
+    aarch64)  RUNTIME="linux-arm64" ;;
+    armv7l)   RUNTIME="linux-arm" ;;
+    *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+esac
 
 echo "Detected architecture: $ARCH → runtime: $RUNTIME"
 
-# ────────── ENSURE TARGET USER EXISTS ──────────
+# ────────── USER SETUP ──────────
 if ! id "$TARGET_USER" &>/dev/null; then
     echo "👤 Creating system user '$TARGET_USER'..."
     sudo adduser --system --group --home "$TARGET_HOME" "$TARGET_USER"
 fi
 
-# Always ensure the user is in the right groups
-echo "👤 Adding $TARGET_USER to dialout and plugdev groups..."
+echo "👤 Ensuring $TARGET_USER is in dialout and plugdev..."
 sudo usermod -a -G dialout "$TARGET_USER"
 sudo usermod -a -G plugdev "$TARGET_USER"
 
-# ────────── INSTALL / UPDATE DOTNET ──────────
-echo ""
-echo "====================================="
-echo "Checking .NET SDK"
-echo "====================================="
-
-INSTALLED_DOTNET_VER=""
-if command -v dotnet &>/dev/null; then
-    INSTALLED_DOTNET_VER=$(dotnet --version || echo "")
-    echo "✅ Found dotnet SDK: $INSTALLED_DOTNET_VER"
-else
-    echo "⚠️ dotnet not found"
-fi
-
-# Get latest available version for this channel from Microsoft
+# ────────── .NET SDK ──────────
 LATEST_DOTNET_VER=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
     | grep -Po '"latest-sdk":\s*"\K[^"]+' | head -n1)
 
-if [[ -z "$LATEST_DOTNET_VER" ]]; then
-    echo "❌ Could not determine latest .NET version for channel $DOTNET_CHANNEL"
-    exit 1
-fi
-
-echo "ℹ️ Latest $DOTNET_CHANNEL SDK available: $LATEST_DOTNET_VER"
-
-# Compare versions
-if [[ "$INSTALLED_DOTNET_VER" != "$LATEST_DOTNET_VER" ]]; then
-    echo "⬆️ Installing/updating dotnet SDK to $LATEST_DOTNET_VER"
-
+if ! command -v dotnet &>/dev/null || [[ "$(dotnet --version)" != "$LATEST_DOTNET_VER" ]]; then
+    echo "⬆️ Installing dotnet SDK $LATEST_DOTNET_VER"
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
-
-    sudo bash "$TMP_SCRIPT" \
-        --channel "$DOTNET_CHANNEL" \
-        --install-dir "$DOTNET_INSTALL_DIR" \
-        --quality ga
-
+    sudo bash "$TMP_SCRIPT" --channel "$DOTNET_CHANNEL" --install-dir "$DOTNET_INSTALL_DIR" --quality ga
     rm -f "$TMP_SCRIPT"
-
-    if [[ ! -L /usr/local/bin/dotnet ]]; then
-        sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
-    fi
-
-    echo "✅ dotnet installed/updated: $(dotnet --version)"
-else
-    echo "✅ dotnet is already up to date ($INSTALLED_DOTNET_VER)"
+    sudo ln -sf "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
 fi
 
-# ────────── INSTALL SQLITE IF MISSING ──────────
-echo ""
-echo "====================================="
-echo "Checking sqlite3"
-echo "====================================="
+echo "✅ dotnet SDK: $(dotnet --version)"
 
+# ────────── SQLITE ──────────
 if ! command -v sqlite3 &>/dev/null; then
     echo "⬇️ Installing sqlite3..."
     sudo apt-get update -y
     sudo apt-get install -y sqlite3
-    echo "✅ sqlite3 installed: $(sqlite3 --version)"
-else
-    echo "✅ sqlite3 detected: $(sqlite3 --version)"
 fi
+echo "✅ sqlite3: $(sqlite3 --version)"
 
 # ────────── BUILD & PUBLISH ──────────
-echo ""
-echo "====================================="
-echo "Publishing SerialRelayController"
-echo "====================================="
-
+echo "🚀 Publishing SerialRelayController..."
 dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "publish"
-
-# ────────── COPY TO TARGET DIRECTORY ──────────
-echo ""
-echo "====================================="
-echo "Copying files to $PUBLISH_DIR"
-echo "====================================="
 
 sudo mkdir -p "$PUBLISH_DIR"
 sudo cp -r publish/* "$PUBLISH_DIR/"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
-# ────────── ENSURE QUARTZ DB & SCHEMA ──────────
-echo ""
-echo "====================================="
-echo "Ensuring Quartz schema exists in $QUARTZ_DB"
-echo "====================================="
+# ────────── CONFIG CHECK ──────────
+echo "🔍 Checking configs..."
+for f in appsettings.json commands.json; do
+    if [[ ! -f "$PUBLISH_DIR/$f" ]]; then
+        echo "❌ Missing $f in publish dir!"
+        exit 1
+    fi
+done
+echo "✅ Found configs: appsettings.json, commands.json"
 
+grep -A5 SerialPortOptions "$PUBLISH_DIR/appsettings.json" || echo "⚠️ No SerialPortOptions section found!"
+
+# ────────── QUARTZ DB ──────────
 if [[ ! -f "$QUARTZ_DB" ]]; then
     echo "📂 Creating Quartz DB at $QUARTZ_DB"
     sudo -u "$TARGET_USER" touch "$QUARTZ_DB"
@@ -140,21 +90,14 @@ fi
 
 TMP_SCHEMA="$(mktemp)"
 curl -sSL "$QUARTZ_SCHEMA_URL" -o "$TMP_SCHEMA"
-
-# Apply schema (ignore errors if tables already exist)
-echo "📜 Applying Quartz schema..."
 sudo -u "$TARGET_USER" sqlite3 "$QUARTZ_DB" < "$TMP_SCHEMA" || true
 rm -f "$TMP_SCHEMA"
 
-# Fix ownership & perms
 sudo chown "$TARGET_USER:$TARGET_USER" "$QUARTZ_DB"
 sudo chmod 664 "$QUARTZ_DB"
 
-# ────────── WRITE SYSTEMD SERVICE FILE ──────────
-echo ""
-echo "====================================="
-echo "Deploying service file to $SERVICE_FILE"
-echo "====================================="
+# ────────── SYSTEMD SERVICE ──────────
+echo "⚙️ Writing service file to $SERVICE_FILE"
 
 sudo tee "$SERVICE_FILE" >/dev/null <<EOF
 [Unit]
@@ -167,10 +110,8 @@ ExecStart=/usr/local/bin/dotnet $PUBLISH_DIR/SerialRelayController.dll
 
 Restart=always
 RestartSec=5
-
 User=$TARGET_USER
 
-# Allow binding to port 80 without root
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
@@ -185,24 +126,18 @@ SyslogIdentifier=serialrelaycontroller
 WantedBy=multi-user.target
 EOF
 
-# ────────── RELOAD SYSTEMD & START SERVICE ──────────
-echo ""
-echo "====================================="
-echo "Reloading systemd, enabling & restarting $SERVICE_NAME"
-echo "====================================="
-
+# ────────── ENABLE SERVICE ──────────
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
 
-# ────────── STATUS & LOGS ──────────
-echo ""
-echo "====================================="
-echo "Status of $SERVICE_NAME"
-echo "====================================="
-
+echo "✅ Service deployed. Status:"
 sudo systemctl status "$SERVICE_NAME" --no-pager
+echo ""
+echo "📜 Logs (last 50 lines):"
+sudo journalctl -u "$SERVICE_NAME" -n 50 --no-pager
 
+# ────────── ASK TO TAIL LOGS ──────────
 echo ""
 read -rp "Do you want to tail live logs? (y/n): " tail_logs
 if [[ "${tail_logs,,}" =~ ^y(es)?$ ]]; then
