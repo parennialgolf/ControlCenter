@@ -37,7 +37,7 @@ builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true)
 var app = builder.Build();
 
 app.MapPost("{lockerNumber:int}/unlock", async (
-        int lockerNumber,
+        [FromRoute] int lockerNumber,
         PortController relay,
         [FromBody] UnlockDuration? duration = null) =>
     {
