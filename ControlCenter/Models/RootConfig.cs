@@ -1,6 +1,4 @@
-using ControlCenter.Models;
-
-namespace Shared.Models;
+namespace ControlCenter.Models;
 
 public class RootConfig
 {

@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Xml.Serialization;
 using ControlCenter.Models;
 using Microsoft.Extensions.Options;
-using Shared.Models;
 
 namespace ControlCenter.Services;
 

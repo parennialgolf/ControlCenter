@@ -7,7 +7,6 @@ using ControlCenter.Models;
 using ControlCenter.Services;
 using Microsoft.Extensions.Options;
 using Shared;
-using Shared.Models;
 using Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -76,48 +75,19 @@ app.MapGet("/doors/status", async (ControlByWebRelayController controller) =>
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         int lockerNumber,
         HttpClient httpClient,
-        IOptionsMonitor<LockersConfig> lockerConfig,
-        IConfiguration config,
-        ILogger<Program> logger) =>
+        IOptionsMonitor<LockersConfig> config) =>
     {
-        if (lockerConfig.CurrentValue.UseLegacy)
-        {
-            // curl -X POST http://10.1.10.150:5000/unlock \
-            // -H "Content-Type: application/json" \
-            // -d '{"locker_number": 10}'
+        var response = await httpClient.PostAsync(
+            new Uri($"http://{config.CurrentValue.Host}/lockers/{lockerNumber}/unlock"),
+            null);
 
-            logger.LogInformation("Unlocking locker {LockerNumber} using legacy API", lockerNumber);
+        var body = await response.Content.ReadAsStringAsync();
 
-            var response = await httpClient.PostAsync(
-                $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/unlock",
-                new StringContent(
-                    JsonSerializer.Serialize(new { locker_number = lockerNumber }),
-                    Encoding.UTF8,
-                    "application/json"));
+        var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
-            }
-
-            var result =
-                JsonSerializer.Deserialize<LockerPassthroughResult>(await response.Content.ReadAsStringAsync());
-
-            return Results.Ok(result);
-        }
-        else
-        {
-            var forwardUrl = $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}/lockers/{lockerNumber}/unlock";
-
-            var response = await httpClient.PostAsync(forwardUrl, null);
-            var body = await response.Content.ReadAsStringAsync();
-
-            var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
-
-            return response.IsSuccessStatusCode
-                ? Results.Ok(result)
-                : Results.BadRequest(result);
-        }
+        return response.IsSuccessStatusCode
+            ? Results.Ok(result)
+            : Results.BadRequest(result);
     })
     .WithName("UnlockLocker");
 

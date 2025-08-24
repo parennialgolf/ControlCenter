@@ -1,9 +1,9 @@
-namespace Shared.Models;
+namespace ControlCenter.Models;
 
 public class LockersConfig
 {
+    public string Host { get; set; } = null!;
     public bool Managed { get; set; }
-    public bool UseLegacy { get; set; }
     public int Max { get; set; }
     public List<string> SerialPorts { get; set; } = [];
 }
