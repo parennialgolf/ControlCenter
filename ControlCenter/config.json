@@ -2,7 +2,7 @@
   "Doors": {
     "Managed": true,
     "Max": 1,
-    "IpAddress": "192.168.7.200"
+    "IpAddress": "10.1.10.101"
   },
   "Projectors": {
     "Managed": true,
@@ -11,32 +11,20 @@
       {
         "Id": 1,
         "Name": "Bay 1",
-        "IpAddress": "10.1.10.122",
-        "Protocol": "Rs232"
+        "IpAddress": "10.1.10.182",
+        "Protocol": "PJLink"
       },
       {
         "Id": 2,
         "Name": "Bay 2",
         "IpAddress": "10.1.10.138",
-        "Protocol": "Rs232"
+        "Protocol": "PJLink"
       },
       {
         "Id": 3,
         "Name": "Bay 3",
-        "IpAddress": "10.1.10.98",
-        "Protocol": "Rs232"
-      },
-      {
-        "Id": 4,
-        "Name": "Bay 4",
-        "IpAddress": "10.1.10.60",
-        "Protocol": "Rs232"
-      },
-      {
-        "Id": 5,
-        "Name": "Bay 5",
-        "IpAddress": "10.1.10.88",
-        "Protocol": "Rs232"
+        "IpAddress": "10.1.10.57",
+        "Protocol": "PJLink"
       }
     ]
   },

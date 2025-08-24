@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ────────── CONFIG ──────────
-LOCKER_HOST="pgl-2-lockers"
+LOCKER_HOST="pgl-1-lockers"
 
 DOTNET_CHANNEL="9.0"                 # or "LTS"
 DOTNET_INSTALL_DIR="/opt/dotnet"
