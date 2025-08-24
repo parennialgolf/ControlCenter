@@ -109,7 +109,7 @@ echo "====================================="
 echo "Publishing SerialRelayController"
 echo "====================================="
 
-dotnet publish "$PROJECT_DIR" -c Release -r "$RUNTIME" --self-contained false -o "publish"
+dotnet publish "$PROJECT_DIR/SerialRelayController.csproj" -c Release -r "$RUNTIME" --self-contained false -o "publish"
 
 # ────────── COPY TO TARGET DIRECTORY ──────────
 echo ""
@@ -118,7 +118,7 @@ echo "Copying files to $PUBLISH_DIR"
 echo "====================================="
 
 sudo mkdir -p "$PUBLISH_DIR"
-sudo cp -r publish/* "$PUBLISH_DIR/"
+sudo cp -r "$PROJECT_DIR/publish/"* "$PUBLISH_DIR/"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
 # ────────── ENSURE QUARTZ DB & SCHEMA ──────────
