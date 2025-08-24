@@ -78,7 +78,7 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         IOptionsMonitor<LockersConfig> config) =>
     {
         var response = await httpClient.PostAsync(
-            new Uri($"http://{config.CurrentValue.Host}/lockers/{lockerNumber}/unlock"),
+            new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"),
             null);
 
         var body = await response.Content.ReadAsStringAsync();
@@ -94,17 +94,10 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 app.MapGet("/lockers/status", async (
     int lockerNumber,
     HttpClient httpClient,
-    IConfiguration config) =>
+    IOptionsMonitor<LockersConfig> lockerConfig) =>
 {
-    if (config.GetValue<bool>("USE_LEGACY_LOCKER_API"))
-    {
-        return Results.StatusCode(StatusCodes.Status501NotImplemented);
-    }
 
-    var forwardUrl =
-        $"http://{config.GetValue<string>("SERIAL_RELAY_CONTROLLER_HOST")}:{config.GetValue<int>("SERIAL_RELAY_CONTROLLER_PORT")}/lockers/status";
-
-    var response = await httpClient.GetAsync(forwardUrl);
+    var response = await httpClient.GetAsync(new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"));
 
     if (!response.IsSuccessStatusCode)
     {

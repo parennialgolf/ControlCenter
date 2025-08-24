@@ -54,7 +54,7 @@ echo "====================================="
 
 INSTALLED_DOTNET_VER=""
 if command -v dotnet &>/dev/null; then
-    INSTALLED_DOTNET_VER=$(dotnet --version)
+    INSTALLED_DOTNET_VER=$(dotnet --version || echo "")
     echo "✅ Found dotnet SDK: $INSTALLED_DOTNET_VER"
 else
     echo "⚠️ dotnet not found"
@@ -170,10 +170,14 @@ RestartSec=5
 
 User=$TARGET_USER
 
-Environment=SERIAL_RELAY_CONTROLLER_PORT=5001
+# Allow binding to port 80 without root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+Environment=SERIAL_RELAY_CONTROLLER_PORT=80
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
-Environment=ASPNETCORE_URLS=http://0.0.0.0:5001
+Environment=ASPNETCORE_URLS=http://0.0.0.0:80
 
 SyslogIdentifier=serialrelaycontroller
 
