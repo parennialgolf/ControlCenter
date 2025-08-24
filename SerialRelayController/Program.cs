@@ -36,7 +36,7 @@ builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true)
 
 var app = builder.Build();
 
-app.MapPost("{lockerNumber:int}/unlock", async (
+app.MapPost("lockers/{lockerNumber:int}/unlock", async (
         [FromRoute] int lockerNumber,
         PortController relay,
         [FromBody] UnlockDuration? duration = null) =>
@@ -79,7 +79,7 @@ app.MapPost("{lockerNumber:int}/unlock", async (
     .WithDescription(
         "Unlocks a locker by sending ON, verifying status, then OFF. Returns 200 OK if the relay reports ON, otherwise 400.");
 
-app.MapGet("{lockerNumber:int}/status", (
+app.MapGet("lockers/{lockerNumber:int}/status", (
         int lockerNumber,
         SerialPorts ports) =>
     {
@@ -117,7 +117,7 @@ app.MapGet("{lockerNumber:int}/status", (
     })
     .WithName("LockerStatus");
 
-app.MapGet("status", (SerialPorts ports) =>
+app.MapGet("lockers/status", (SerialPorts ports) =>
     {
         var statuses = ports.GetAllStatuses();
 
