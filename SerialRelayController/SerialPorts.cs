@@ -5,11 +5,8 @@ namespace SerialRelayController;
 
 public class SerialPorts(
     LockerStateCache cache,
-    IOptions<SerialPortOptions> options)
+    IOptionsMonitor<SerialPortOptions> options)
 {
-    // Fixed mapping of relay boards to ports (order matters).
-    private readonly List<string> _serialPortPaths = options.Value.Ports;
-
     private const int ChannelsPerBoard = 16;
 
     private readonly Lazy<Dictionary<string, Command>> _commands = new(Load);
@@ -36,7 +33,7 @@ public class SerialPorts(
     {
         var results = new List<LockerRelayStatus>();
 
-        for (var boardIndex = 0; boardIndex < _serialPortPaths.Count; boardIndex++)
+        for (var boardIndex = 0; boardIndex < options.CurrentValue.Ports.Count; boardIndex++)
         {
             for (var i = 0; i < ChannelsPerBoard; i++)
             {
@@ -57,17 +54,17 @@ public class SerialPorts(
     /// </summary>
     public GetRelayResult GetRelay(int lockerNumber)
     {
-        if (_serialPortPaths.Count == 0)
+        if (options.CurrentValue.Ports.Count == 0)
             throw new InvalidOperationException(
                 "No serial ports configured. Please set SerialPortOptions:Ports in appsettings.json");
 
         var portIndex = (lockerNumber - 1) / ChannelsPerBoard;
-        if (portIndex < 0 || portIndex >= _serialPortPaths.Count)
+        if (portIndex < 0 || portIndex >= options.CurrentValue.Ports.Count)
             throw new ArgumentOutOfRangeException(nameof(lockerNumber),
                 $"Locker {lockerNumber} is out of range. " +
-                $"Valid range: 1 - {_serialPortPaths.Count * ChannelsPerBoard}");
+                $"Valid range: 1 - {options.CurrentValue.Ports.Count * ChannelsPerBoard}");
 
-        var serialPort = _serialPortPaths[portIndex];
+        var serialPort = options.CurrentValue.Ports[portIndex];
         var channel = ((lockerNumber - 1) % ChannelsPerBoard) + 1;
         return new GetRelayResult(serialPort, channel);
     }
