@@ -52,11 +52,20 @@ public class SerialPorts(
     /// <summary>
     /// Maps a locker number to the correct serial port + relay channel.
     /// </summary>
+    /// <summary>
+    /// Maps a locker number to the correct serial port + relay channel.
+    /// </summary>
     public GetRelayResult GetRelay(int lockerNumber)
     {
+        if (_serialPortPaths.Count == 0)
+            throw new InvalidOperationException(
+                "No serial ports configured. Please set SerialPortOptions:Ports in appsettings.json");
+
         var portIndex = (lockerNumber - 1) / ChannelsPerBoard;
         if (portIndex < 0 || portIndex >= _serialPortPaths.Count)
-            throw new ArgumentOutOfRangeException(nameof(lockerNumber));
+            throw new ArgumentOutOfRangeException(nameof(lockerNumber),
+                $"Locker {lockerNumber} is out of range. " +
+                $"Valid range: 1 - {_serialPortPaths.Count * ChannelsPerBoard}");
 
         var serialPort = _serialPortPaths[portIndex];
         var channel = ((lockerNumber - 1) % ChannelsPerBoard) + 1;
