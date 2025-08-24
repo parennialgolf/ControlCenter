@@ -94,7 +94,7 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 app.MapGet("/lockers/status", async (
     int lockerNumber,
     HttpClient httpClient,
-    IOptionsMonitor<LockersConfig> lockerConfig) =>
+    IOptionsMonitor<LockersConfig> config) =>
 {
 
     var response = await httpClient.GetAsync(new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"));
