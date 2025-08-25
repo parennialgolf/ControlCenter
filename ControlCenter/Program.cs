@@ -100,16 +100,13 @@ app.MapGet("/lockers/status", async (
 {
     var response = await httpClient.GetAsync(new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"));
 
-    if (!response.IsSuccessStatusCode)
-    {
-        return Results.BadRequest(new { success = false, error = await response.Content.ReadAsStringAsync() });
-    }
-
     var body = await response.Content.ReadAsStringAsync();
 
     var result = JsonSerializer.Deserialize<LockerStatusResponse>(body);
 
-    return Results.Ok(result);
+    return response.IsSuccessStatusCode
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
 });
 
 

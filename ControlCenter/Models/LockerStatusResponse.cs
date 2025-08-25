@@ -7,11 +7,6 @@ public record LockerStatusResponse(
     List<LockerStatusResult> Data
 );
 
-public record LockerStatusResult(
-    int LockerNumber,
-    LockerStatus Status,
-    string? Error = null);
-
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum LockerStatus
 {
@@ -20,3 +15,8 @@ public enum LockerStatus
     FailedToUnlock,
     Unknown
 }
+
+public record LockerStatusResult(
+    int LockerNumber,
+    LockerStatus Status,
+    string? Error = null);
