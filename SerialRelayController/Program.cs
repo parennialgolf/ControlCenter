@@ -51,19 +51,8 @@ app.MapPost("{lockerNumber:int}/unlock", async (
                 : $"Error opening lockerNumber: {lockerNumber}, {result.Error}");
 
             return result.Success
-                ? Results.Ok(new
-                {
-                    lockerNumber,
-                    status = "Unlocked",
-                    response = result.StatusResponse
-                })
-                : Results.BadRequest(new
-                {
-                    lockerNumber,
-                    status = "Failed",
-                    error = result.Error,
-                    response = result.StatusResponse
-                });
+                ? Results.Ok(new LockerStatusResult(lockerNumber, LockerStatus.Unlocked))
+                : Results.BadRequest(new LockerStatusResult(lockerNumber, LockerStatus.FailedToUnlock, result.Error));
         }
         catch (Exception ex)
         {
@@ -140,12 +129,14 @@ public record LockerStatusResponse(
 
 public record LockerStatusResult(
     int LockerNumber,
-    LockerStatus Status);
+    LockerStatus Status,
+    string? Error = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum LockerStatus
 {
     Locked,
     Unlocked,
+    FailedToUnlock,
     Unknown
 }

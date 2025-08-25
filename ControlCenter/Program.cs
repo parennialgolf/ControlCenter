@@ -83,7 +83,7 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 
         var body = await response.Content.ReadAsStringAsync();
 
-        var result = JsonSerializer.Deserialize<SerialCommandResult>(body);
+        var result = JsonSerializer.Deserialize<LockerStatusResult>(body);
 
         return response.IsSuccessStatusCode
             ? Results.Ok(result)
@@ -96,7 +96,6 @@ app.MapGet("/lockers/status", async (
     HttpClient httpClient,
     IOptionsMonitor<LockersConfig> config) =>
 {
-
     var response = await httpClient.GetAsync(new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"));
 
     if (!response.IsSuccessStatusCode)
@@ -221,13 +220,3 @@ app.MapPost("/config", async (RootConfig updatedConfig) =>
 
 
 await app.RunAsync();
-
-public record LockerPassthroughResult
-{
-    [JsonPropertyName("message")] public string Message { get; set; } = string.Empty;
-};
-
-/// <summary>
-/// Result of sending a command to the relay.
-/// </summary>
-public record SerialCommandResult(bool Success, string? StatusResponse = null, string? Error = null);

@@ -1,4 +1,6 @@
-using ControlCenter.Models;
+using System.Text.Json.Serialization;
+
+namespace ControlCenter.Models;
 
 public record LockerStatusResponse(
     bool Success,
@@ -7,4 +9,14 @@ public record LockerStatusResponse(
 
 public record LockerStatusResult(
     int LockerNumber,
-    LockerStatus Status);
+    LockerStatus Status,
+    string? Error = null);
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LockerStatus
+{
+    Locked,
+    Unlocked,
+    FailedToUnlock,
+    Unknown
+}
