@@ -83,6 +83,8 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 
         var body = await response.Content.ReadAsStringAsync();
 
+        Console.WriteLine(body);
+
         var result = JsonSerializer.Deserialize<LockerStatusResult>(body);
 
         return response.IsSuccessStatusCode
