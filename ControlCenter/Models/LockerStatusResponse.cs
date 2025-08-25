@@ -16,7 +16,11 @@ public enum LockerStatus
     Unknown
 }
 
-public record LockerStatusResult(
-    int LockerNumber,
-    LockerStatus Status,
-    string? Error = null);
+public record LockerStatusResult
+{
+    [JsonPropertyName("lockerNumber")] public int LockerNumber { get; set; }
+
+    [JsonPropertyName("status")] public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("error")] public string? Error { get; set; }
+}
