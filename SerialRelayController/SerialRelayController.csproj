@@ -27,9 +27,9 @@
             <CopyToPublishDirectory>Always</CopyToPublishDirectory>
         </None>
         <None Update="commands.json">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+
     </ItemGroup>
 
 </Project>
