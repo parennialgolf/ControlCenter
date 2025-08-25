@@ -56,11 +56,19 @@ echo "✅ dotnet SDK: $(dotnet --version)"
 
 # ────────── SQLITE ──────────
 if ! command -v sqlite3 &>/dev/null; then
-    echo "⬇️ Installing sqlite3..."
+    echo "⬇️ Installing sqlite3 and native libs..."
     sudo apt-get update -y
-    sudo apt-get install -y sqlite3
+    sudo apt-get install -y sqlite3 libsqlite3-0 libsqlite3-dev
 fi
 echo "✅ sqlite3: $(sqlite3 --version)"
+
+# Ensure e_sqlite3.so is available where System.Data.SQLite expects it
+SQLITE_LIB="/usr/lib/aarch64-linux-gnu/libsqlite3.so.0"
+if [[ -f "$SQLITE_LIB" ]]; then
+    echo "🔗 Linking $SQLITE_LIB → $PUBLISH_DIR/e_sqlite3.so"
+    sudo mkdir -p "$PUBLISH_DIR"
+    sudo ln -sf "$SQLITE_LIB" "$PUBLISH_DIR/e_sqlite3.so"
+fi
 
 # ────────── BUILD & PUBLISH ──────────
 echo "🚀 Publishing SerialRelayController..."
@@ -119,6 +127,7 @@ Environment=SERIAL_RELAY_CONTROLLER_PORT=80
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
 Environment=ASPNETCORE_URLS=http://0.0.0.0:80
+Environment=LD_LIBRARY_PATH=$PUBLISH_DIR:/usr/lib/aarch64-linux-gnu
 
 SyslogIdentifier=serialrelaycontroller
 
@@ -136,6 +145,16 @@ sudo systemctl status "$SERVICE_NAME" --no-pager
 echo ""
 echo "📜 Logs (last 50 lines):"
 sudo journalctl -u "$SERVICE_NAME" -n 50 --no-pager
+
+echo ""
+echo ""
+echo "====================================="
+echo "====================================="
+echo "===== 🚀 Deployment complete! ======="
+echo "====================================="
+echo "====================================="
+echo ""
+echo ""
 
 # ────────── ASK TO TAIL LOGS ──────────
 echo ""
