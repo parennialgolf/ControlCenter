@@ -75,12 +75,12 @@ app.MapGet("/doors/status", async (ControlByWebRelayController controller) =>
 app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         int lockerNumber,
         HttpClient httpClient,
+        ILogger<Program> logger,
         IOptionsMonitor<LockersConfig> config) =>
     {
-        Console.WriteLine(
-            "Received unlock request for locker " +
-            lockerNumber +
-            ", forwarding to " +
+        logger.LogInformation(
+            "Received unlock request for locker {LockerNumber}, forwarding to {Host}",
+            lockerNumber,
             config.CurrentValue.Host);
 
         var response = await httpClient.PostAsync(
@@ -89,7 +89,10 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 
         var body = await response.Content.ReadAsStringAsync();
 
-        Console.WriteLine(body);
+        logger.LogInformation(
+            "Response from locker {LockerNumber} unlock request: {ResponseBody}",
+            lockerNumber,
+            body);
 
         var result = JsonSerializer.Deserialize<LockerStatusResult>(body);
 
