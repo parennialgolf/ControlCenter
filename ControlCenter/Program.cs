@@ -77,6 +77,19 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         HttpClient httpClient,
         IOptionsMonitor<LockersConfig> config) =>
     {
+        if (config.CurrentValue.LegacyEnabled)
+        {
+            var payload = JsonSerializer.Serialize(new { locker_number = lockerNumber });
+
+            var legacyRequest = await httpClient.PostAsync(
+                new Uri($"http://{config.CurrentValue.Host}/unlock"),
+                new StringContent(payload, Encoding.UTF8, "application/json"));
+
+            return legacyRequest.IsSuccessStatusCode
+                ? Results.Ok()
+                : Results.BadRequest();
+        }
+
         var response = await httpClient.PostAsync(
             new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"),
             null);
