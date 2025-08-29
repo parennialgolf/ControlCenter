@@ -1,6 +1,4 @@
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Mvc;
-using Quartz;
 using SerialRelayController;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,11 +9,6 @@ builder.Services.Configure<SerialPortOptions>(
 builder.Services.AddTransient<PortController>();
 builder.Services.AddSingleton<LockerStateCache>();
 builder.Services.AddTransient<SerialPorts>();
-
-// Quartz with SQLite
-builder.Services.AddQuartz(q => q.UseInMemoryStore());
-
-builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 

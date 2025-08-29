@@ -1,7 +1,5 @@
 using System.IO.Ports;
 using System.Text.Json.Serialization;
-using Quartz;
-using SerialRelayController.Jobs;
 
 namespace SerialRelayController;
 
@@ -24,8 +22,7 @@ public record UnlockDuration(int Delay);
 
 public class PortController(
     SerialPorts ports,
-    LockerStateCache cache,
-    ISchedulerFactory factory)
+    LockerStateCache cache)
 {
     /// <summary>
     /// High-level Unlock method:
@@ -51,15 +48,21 @@ public class PortController(
             // Update cache
             cache.MarkUnlocked(lockerNumber);
 
-            // Schedule Quartz job to re-lock
-            var scheduler = await factory.GetScheduler();
-            var job = LockJob.BuildJob();
-            var trigger = LockJob.BuildTrigger(lockerNumber, duration.Delay);
-
-            if (scheduler.CheckExists(trigger.Key).Result)
-                await scheduler.RescheduleJob(trigger.Key, trigger);
-            else
-                await scheduler.ScheduleJob(job, trigger);
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(duration.Delay));
+                    cache.MarkLocked(lockerNumber);
+                    await Lock(lockerNumber);
+                    Console.WriteLine(
+                        $"🔒 Automatically relocked locker {lockerNumber} after {duration.Delay} seconds.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Relock task failed: {ex.Message}");
+                }
+            });
 
             Console.WriteLine($"✅ Successfully unlocked locker {lockerNumber} on {relay.SerialPort}");
             return result;
@@ -123,35 +126,32 @@ public class PortController(
             serialPort.WriteTimeout = 2000;
             serialPort.NewLine = "\r\n";
 
-            serialPort.Open();
-            serialPort.DiscardInBuffer();
-            serialPort.DiscardOutBuffer();
-
-            // Send command
-            serialPort.Write(cmd);
-
-            // Read echo
-            string? response;
             try
             {
-                response = serialPort.ReadLine();
+                serialPort.Open();
+                serialPort.DiscardInBuffer();
+                serialPort.DiscardOutBuffer();
+                serialPort.Write(cmd);
+
+                // Non-blocking read
+                var response = serialPort.ReadExisting();
+                if (string.IsNullOrWhiteSpace(response))
+                    return new SerialCommandResult(false, Error: "No response from relay");
+
+                // Confirm echo matches
+                var success = response.Trim().Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase);
+                if (!success)
+                    return new SerialCommandResult(
+                        false,
+                        StatusResponse: response,
+                        Error: $"Relay did not echo back {(isUnlock ? "ON" : "OFF")} command correctly");
+
+                return new SerialCommandResult(true, StatusResponse: response);
             }
-            catch (TimeoutException)
+            catch (Exception ex)
             {
-                return new SerialCommandResult(false, Error: "No echo received from relay");
+                return new SerialCommandResult(false, Error: $"Serial error: {ex.Message}");
             }
-
-            // Confirm echo matches
-            var success = !string.IsNullOrWhiteSpace(response) &&
-                          response.Trim().Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase);
-
-            if (!success)
-                return new SerialCommandResult(
-                    false,
-                    StatusResponse: response,
-                    Error: $"Relay did not echo back {(isUnlock ? "ON" : "OFF")} command correctly");
-
-            return new SerialCommandResult(true, StatusResponse: response);
         }
         catch (Exception ex)
         {
