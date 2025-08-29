@@ -21,10 +21,12 @@ public class Command
 
 public record UnlockDuration(int Delay);
 
-public class PortController(SerialPorts ports, LockerStateCache cache) : IDisposable
+public sealed class PortController(SerialPorts ports, LockerStateCache cache) : IDisposable
 {
     private readonly ConcurrentDictionary<string, SerialPort> _portCache = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _portLocks = new();
+
+    private bool _disposed;
 
     private SerialPort GetOrCreatePort(string portPath)
     {
@@ -55,7 +57,9 @@ public class PortController(SerialPorts ports, LockerStateCache cache) : IDispos
     private SemaphoreSlim GetLock(string portPath) =>
         _portLocks.GetOrAdd(portPath, _ => new SemaphoreSlim(1, 1));
 
-    public async Task<SerialCommandResult> Unlock(int lockerNumber, LockerUnlockRequest request,
+    public async Task<SerialCommandResult> Unlock(
+        int lockerNumber,
+        LockerUnlockRequest request,
         CancellationToken ct = default)
     {
         try
@@ -63,7 +67,7 @@ public class PortController(SerialPorts ports, LockerStateCache cache) : IDispos
             var relay = ports.GetRelay(lockerNumber, request.SerialPorts);
             var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: true, ct: ct);
 
-            // Mark unlocked even if uncertain
+            // Optimistically mark unlocked
             cache.MarkUnlocked(lockerNumber);
 
             // Schedule relock
@@ -82,7 +86,7 @@ public class PortController(SerialPorts ports, LockerStateCache cache) : IDispos
                 }
                 catch (TaskCanceledException)
                 {
-                    /* expected if request aborted */
+                    Console.WriteLine("⚠️ Relock task canceled");
                 }
                 catch (Exception ex)
                 {
@@ -215,19 +219,32 @@ public class PortController(SerialPorts ports, LockerStateCache cache) : IDispos
         throw new OperationCanceledException(ct);
     }
 
-    public void Dispose()
+    // --- Proper Dispose pattern ---
+    private void Dispose(bool disposing)
     {
-        foreach (var kv in _portCache)
+        if (_disposed) return;
+        if (disposing)
         {
-            try
+            foreach (var kv in _portCache)
             {
-                kv.Value.Dispose();
-                Console.WriteLine($"✅ Closed serial port {kv.Key}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠️ Failed to close {kv.Key}: {ex.Message}");
+                try
+                {
+                    kv.Value.Dispose();
+                    Console.WriteLine($"✅ Closed serial port {kv.Key}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Failed to close {kv.Key}: {ex.Message}");
+                }
             }
         }
+
+        _disposed = true;
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 }
