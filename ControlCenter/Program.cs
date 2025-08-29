@@ -86,12 +86,9 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 
         var request = new LockerUnlockRequest(10, config.CurrentValue.SerialPorts);
 
-        var json = JsonSerializer.Serialize(request);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        var response = await httpClient.PostAsync(
+        var response = await httpClient.PostAsJsonAsync(
             new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"),
-            content,
+            request,
             cancellationToken);
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
