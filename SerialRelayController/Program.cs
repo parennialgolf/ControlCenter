@@ -7,6 +7,7 @@ builder.Services.AddSingleton<PortController>();
 builder.Services.AddSingleton<LockerStateCache>();
 builder.Services.AddTransient<SerialPorts>();
 builder.Services.AddHostedService<ThreadPoolMonitor>();
+builder.Services.AddHostedService<ResourceMonitor>();
 
 var app = builder.Build();
 
