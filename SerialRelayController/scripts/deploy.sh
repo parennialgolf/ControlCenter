@@ -11,8 +11,13 @@ SERVICE_FILE="$SYSTEMD_DIR/$SERVICE_NAME"
 
 TARGET_USER="relayuser"
 TARGET_HOME="/home/$TARGET_USER"
-PROJECT_DIR="$TARGET_HOME/ControlCenter/SerialRelayController"
-PUBLISH_DIR="$PROJECT_DIR/publish"
+
+# Path to your project file (adjust if needed)
+PROJECT_FILE="/home/admin/ControlCenter/SerialRelayController/SerialRelayController.csproj"
+
+# Final deployment dir (runtime-only, no git repo)
+DEPLOY_DIR="/opt/serialrelaycontroller"
+PUBLISH_DIR="$DEPLOY_DIR/publish"
 
 ARCH=$(uname -m)
 
@@ -52,10 +57,14 @@ fi
 echo "✅ dotnet SDK installed: $(dotnet --version)"
 
 # ────────── BUILD APP LOCALLY ──────────
-echo "🚀 Publishing SerialRelayController on the Pi..."
-dotnet publish "$PROJECT_DIR" -c Release -r "$RUNTIME" --self-contained false -o "$PUBLISH_DIR"
+echo "🚀 Publishing SerialRelayController..."
+sudo mkdir -p "$PUBLISH_DIR"
+sudo chown -R "$USER:$USER" "$DEPLOY_DIR"
 
-sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
+dotnet publish "$PROJECT_FILE" -c Release -r "$RUNTIME" --self-contained false -o "$PUBLISH_DIR"
+
+# Make relayuser own runtime files
+sudo chown -R "$TARGET_USER:$TARGET_USER" "$DEPLOY_DIR"
 
 # ────────── CONFIG CHECK ──────────
 if [[ -f "$PUBLISH_DIR/appsettings.json" && -f "$PUBLISH_DIR/commands.json" ]]; then
