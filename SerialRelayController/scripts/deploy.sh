@@ -14,9 +14,6 @@ TARGET_HOME="/home/$TARGET_USER"
 PROJECT_DIR="$TARGET_HOME/ControlCenter/SerialRelayController"
 PUBLISH_DIR="$PROJECT_DIR/publish"
 
-QUARTZ_DB="$TARGET_HOME/ControlCenter/quartz.db"
-QUARTZ_SCHEMA_URL="https://raw.githubusercontent.com/quartznet/quartznet/main/database/tables/tables_sqlite.sql"
-
 ARCH=$(uname -m)
 
 # ────────── DETECT RUNTIME ──────────
@@ -54,22 +51,6 @@ fi
 
 echo "✅ dotnet SDK: $(dotnet --version)"
 
-# ────────── SQLITE ──────────
-if ! command -v sqlite3 &>/dev/null; then
-    echo "⬇️ Installing sqlite3 and native libs..."
-    sudo apt-get update -y
-    sudo apt-get install -y sqlite3 libsqlite3-0 libsqlite3-dev
-fi
-echo "✅ sqlite3: $(sqlite3 --version)"
-
-# Ensure e_sqlite3.so is available where System.Data.SQLite expects it
-SQLITE_LIB="/usr/lib/aarch64-linux-gnu/libsqlite3.so.0"
-if [[ -f "$SQLITE_LIB" ]]; then
-    echo "🔗 Linking $SQLITE_LIB → $PUBLISH_DIR/e_sqlite3.so"
-    sudo mkdir -p "$PUBLISH_DIR"
-    sudo ln -sf "$SQLITE_LIB" "$PUBLISH_DIR/e_sqlite3.so"
-fi
-
 # ────────── BUILD & PUBLISH ──────────
 echo "🚀 Publishing SerialRelayController..."
 dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "publish"
@@ -89,20 +70,6 @@ done
 echo "✅ Found configs: appsettings.json, commands.json"
 
 grep -A5 SerialPortOptions "$PUBLISH_DIR/appsettings.json" || echo "⚠️ No SerialPortOptions section found!"
-
-# ────────── QUARTZ DB ──────────
-if [[ ! -f "$QUARTZ_DB" ]]; then
-    echo "📂 Creating Quartz DB at $QUARTZ_DB"
-    sudo -u "$TARGET_USER" touch "$QUARTZ_DB"
-fi
-
-TMP_SCHEMA="$(mktemp)"
-curl -sSL "$QUARTZ_SCHEMA_URL" -o "$TMP_SCHEMA"
-sudo -u "$TARGET_USER" sqlite3 "$QUARTZ_DB" < "$TMP_SCHEMA" || true
-rm -f "$TMP_SCHEMA"
-
-sudo chown "$TARGET_USER:$TARGET_USER" "$QUARTZ_DB"
-sudo chmod 664 "$QUARTZ_DB"
 
 # ────────── SYSTEMD SERVICE ──────────
 echo "⚙️ Writing service file to $SERVICE_FILE"
@@ -127,7 +94,6 @@ Environment=SERIAL_RELAY_CONTROLLER_PORT=80
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
 Environment=ASPNETCORE_URLS=http://0.0.0.0:80
-Environment=LD_LIBRARY_PATH=$PUBLISH_DIR:/usr/lib/aarch64-linux-gnu
 
 SyslogIdentifier=serialrelaycontroller
 

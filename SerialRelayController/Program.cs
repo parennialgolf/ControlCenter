@@ -13,24 +13,7 @@ builder.Services.AddSingleton<LockerStateCache>();
 builder.Services.AddTransient<SerialPorts>();
 
 // Quartz with SQLite
-builder.Services.AddQuartz(q =>
-{
-    if (builder.Environment.IsDevelopment())
-    {
-        q.UseInMemoryStore();
-    }
-    else
-    {
-        // Persistent job store in SQLite
-        q.UsePersistentStore(store =>
-        {
-            store.UseProperties = true;
-            store.UseSystemTextJsonSerializer();
-
-            store.UseSQLite(sqlite => sqlite.ConnectionString = "Data Source=/home/user/ControlCenter/quartz.db;");
-        });
-    }
-});
+builder.Services.AddQuartz(q => q.UseInMemoryStore());
 
 builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 

@@ -56,7 +56,10 @@ public class PortController(
             var job = LockJob.BuildJob();
             var trigger = LockJob.BuildTrigger(lockerNumber, duration.Delay);
 
-            await scheduler.ScheduleJob(job, trigger);
+            if (scheduler.CheckExists(trigger.Key).Result)
+                await scheduler.RescheduleJob(trigger.Key, trigger);
+            else
+                await scheduler.ScheduleJob(job, trigger);
 
             Console.WriteLine($"✅ Successfully unlocked locker {lockerNumber} on {relay.SerialPort}");
             return result;
