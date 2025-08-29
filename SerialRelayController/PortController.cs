@@ -30,28 +30,45 @@ public sealed class PortController(SerialPorts ports, LockerStateCache cache) : 
 
     private SerialPort GetOrCreatePort(string portPath)
     {
-        return _portCache.GetOrAdd(portPath, path =>
+        if (_portCache.TryGetValue(portPath, out var existing))
         {
-            var sp = new SerialPort(path, 9600, Parity.None, 8, StopBits.One)
-            {
-                ReadTimeout = 1000,
-                WriteTimeout = 1000,
-                NewLine = "\r\n"
-            };
+            if (existing.IsOpen)
+                return existing;
 
+            // Port is cached but closed → remove and recreate
+            _portCache.TryRemove(portPath, out _);
             try
             {
-                sp.Open();
-                Console.WriteLine($"✅ Opened serial port {path}");
+                existing.Dispose();
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"⚠️ Failed to open {path}: {ex.Message}");
-                throw;
+                // ignored
             }
 
-            return sp;
-        });
+            Console.WriteLine($"♻️ Disposed stale serial port {portPath}");
+        }
+
+        var sp = new SerialPort(portPath, 9600, Parity.None, 8, StopBits.One)
+        {
+            ReadTimeout = 1000,
+            WriteTimeout = 1000,
+            NewLine = "\r\n"
+        };
+
+        try
+        {
+            sp.Open();
+            Console.WriteLine($"✅ Opened serial port {portPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Failed to open {portPath}: {ex.Message}");
+            throw new InvalidOperationException($"Failed to open port {portPath}", ex);
+        }
+
+        _portCache[portPath] = sp;
+        return sp;
     }
 
     private SemaphoreSlim GetLock(string portPath) =>
@@ -86,7 +103,7 @@ public sealed class PortController(SerialPorts ports, LockerStateCache cache) : 
                 }
                 catch (TaskCanceledException)
                 {
-                    Console.WriteLine("⚠️ Relock task canceled");
+                    // expected if request aborted
                 }
                 catch (Exception ex)
                 {
@@ -184,12 +201,11 @@ public sealed class PortController(SerialPorts ports, LockerStateCache cache) : 
 
             return new SerialCommandResult(true, normalized, "Unexpected response, assumed success");
         }
-        catch (OperationCanceledException)
-        {
-            return new SerialCommandResult(false, Error: "Operation canceled due to timeout or request abort");
-        }
         catch (Exception ex)
         {
+            // If the port died (unplug/replug), purge it so next call recreates
+            _portCache.TryRemove(portPath, out _);
+
             return new SerialCommandResult(false, Error: $"Serial communication error: {ex.Message}");
         }
         finally
