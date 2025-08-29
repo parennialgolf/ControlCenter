@@ -100,12 +100,6 @@ Environment=ASPNETCORE_URLS=http://0.0.0.0:80
 
 SyslogIdentifier=serialrelaycontroller
 
-# --- WATCHDOG SETTINGS ---
-# systemd waits for READY=1 then expects WATCHDOG=1 every 30s
-Type=notify
-NotifyAccess=all
-WatchdogSec=30s
-
 [Install]
 WantedBy=multi-user.target
 EOF
