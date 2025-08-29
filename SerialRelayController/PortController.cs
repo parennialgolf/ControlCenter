@@ -31,11 +31,11 @@ public class PortController(
     /// 3. Update cache
     /// 4. Schedule relock job with Quartz
     /// </summary>
-    public async Task<SerialCommandResult> Unlock(int lockerNumber, UnlockDuration duration)
+    public async Task<SerialCommandResult> Unlock(int lockerNumber, LockerUnlockRequest request)
     {
         try
         {
-            var relay = ports.GetRelay(lockerNumber);
+            var relay = ports.GetRelay(lockerNumber, request.SerialPorts);
             if (!File.Exists(relay.SerialPort))
                 return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
 
@@ -52,11 +52,11 @@ public class PortController(
             {
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(duration.Delay));
+                    await Task.Delay(TimeSpan.FromSeconds(request.Duration));
                     cache.MarkLocked(lockerNumber);
-                    await Lock(lockerNumber);
+                    await Lock(lockerNumber, request.SerialPorts);
                     Console.WriteLine(
-                        $"🔒 Automatically relocked locker {lockerNumber} after {duration.Delay} seconds.");
+                        $"🔒 Automatically relocked locker {lockerNumber} after {request.Duration} seconds.");
                 }
                 catch (Exception ex)
                 {
@@ -79,11 +79,11 @@ public class PortController(
     /// 2. Send OFF command and confirm
     /// 3. Update cache
     /// </summary>
-    public async Task<SerialCommandResult> Lock(int lockerNumber)
+    public async Task<SerialCommandResult> Lock(int lockerNumber, List<string> serialPorts)
     {
         try
         {
-            var relay = ports.GetRelay(lockerNumber);
+            var relay = ports.GetRelay(lockerNumber, serialPorts);
             if (!File.Exists(relay.SerialPort))
                 return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
 

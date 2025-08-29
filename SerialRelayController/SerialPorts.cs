@@ -3,9 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace SerialRelayController;
 
-public class SerialPorts(
-    LockerStateCache cache,
-    IOptionsMonitor<SerialPortOptions> options)
+public class SerialPorts(LockerStateCache cache)
 {
     private const int ChannelsPerBoard = 16;
 
@@ -29,11 +27,11 @@ public class SerialPorts(
     private Command? GetDirectCommand(string key)
         => Commands.GetValueOrDefault(key);
 
-    public List<LockerRelayStatus> GetAllStatuses()
+    public List<LockerRelayStatus> GetAllStatuses(List<string> serialPorts)
     {
         var results = new List<LockerRelayStatus>();
 
-        for (var boardIndex = 0; boardIndex < options.CurrentValue.Ports.Count; boardIndex++)
+        for (var boardIndex = 0; boardIndex < serialPorts.Count; boardIndex++)
         {
             for (var i = 0; i < ChannelsPerBoard; i++)
             {
@@ -52,19 +50,19 @@ public class SerialPorts(
     /// <summary>
     /// Maps a locker number to the correct serial port + relay channel.
     /// </summary>
-    public GetRelayResult GetRelay(int lockerNumber)
+    public GetRelayResult GetRelay(int lockerNumber, List<string> serialPorts)
     {
-        if (options.CurrentValue.Ports.Count == 0)
+        if (serialPorts.Count == 0)
             throw new InvalidOperationException(
                 "No serial ports configured. Please set SerialPortOptions:Ports in appsettings.json");
 
         var portIndex = (lockerNumber - 1) / ChannelsPerBoard;
-        if (portIndex < 0 || portIndex >= options.CurrentValue.Ports.Count)
+        if (portIndex < 0 || portIndex >= serialPorts.Count)
             throw new ArgumentOutOfRangeException(nameof(lockerNumber),
                 $"Locker {lockerNumber} is out of range. " +
-                $"Valid range: 1 - {options.CurrentValue.Ports.Count * ChannelsPerBoard}");
+                $"Valid range: 1 - {serialPorts.Count * ChannelsPerBoard}");
 
-        var serialPort = options.CurrentValue.Ports[portIndex];
+        var serialPort = serialPorts[portIndex];
         var channel = ((lockerNumber - 1) % ChannelsPerBoard) + 1;
         return new GetRelayResult(serialPort, channel);
     }

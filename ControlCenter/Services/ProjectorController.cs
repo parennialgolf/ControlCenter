@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using ControlCenter;
+using Shared.Services;
 
-namespace Shared.Services;
+namespace ControlCenter.Services;
 
 public class ProjectorTransmissionResult(bool wasSent, string? response, string? error)
 {

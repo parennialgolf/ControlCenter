@@ -3,9 +3,6 @@ using SerialRelayController;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<SerialPortOptions>(
-    builder.Configuration.GetSection("SerialPortOptions"));
-
 builder.Services.AddTransient<PortController>();
 builder.Services.AddSingleton<LockerStateCache>();
 builder.Services.AddTransient<SerialPorts>();
@@ -14,13 +11,12 @@ var app = builder.Build();
 
 app.MapPost("{lockerNumber:int}/unlock", async (
         int lockerNumber,
-        UnlockDuration? duration,
+        LockerUnlockRequest request,
         PortController relay) =>
     {
         try
         {
-            duration ??= new UnlockDuration(10);
-            var result = await relay.Unlock(lockerNumber, duration);
+            var result = await relay.Unlock(lockerNumber, request);
 
             Console.WriteLine(result.Success
                 ? $"Successfully opened lockerNumber: {lockerNumber}"
@@ -44,13 +40,14 @@ app.MapPost("{lockerNumber:int}/unlock", async (
     .WithDescription(
         "Unlocks a locker by sending ON, verifying status, then OFF. Returns 200 OK if the relay reports ON, otherwise 400.");
 
-app.MapGet("{lockerNumber:int}/status", (
+app.MapPost("{lockerNumber:int}/status", (
         int lockerNumber,
+        List<string> serialPorts,
         SerialPorts ports) =>
     {
         try
         {
-            var statuses = ports.GetAllStatuses();
+            var statuses = ports.GetAllStatuses(serialPorts);
 
             var lockerStatus = statuses.FirstOrDefault(s => s.LockerNumber == lockerNumber);
 
@@ -82,9 +79,9 @@ app.MapGet("{lockerNumber:int}/status", (
     })
     .WithName("LockerStatus");
 
-app.MapGet("status", (SerialPorts ports) =>
+app.MapPost("status", (List<string> serialPorts, SerialPorts ports) =>
     {
-        var statuses = ports.GetAllStatuses();
+        var statuses = ports.GetAllStatuses(serialPorts);
 
         return Results.Ok(new LockerStatusResponse(
             true,
@@ -97,6 +94,10 @@ app.MapGet("status", (SerialPorts ports) =>
     .WithDescription("Returns the status of all lockers across all relay boards.");
 
 await app.RunAsync();
+
+public record LockerUnlockRequest(
+    int Duration,
+    List<string> SerialPorts);
 
 public record LockerStatusResponse(
     bool Success,

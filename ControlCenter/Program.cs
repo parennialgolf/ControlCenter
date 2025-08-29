@@ -76,18 +76,25 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
         int lockerNumber,
         HttpClient httpClient,
         ILogger<Program> logger,
-        IOptionsMonitor<LockersConfig> config) =>
+        IOptionsMonitor<LockersConfig> config,
+        CancellationToken cancellationToken = default) =>
     {
         logger.LogInformation(
             "Received unlock request for locker {LockerNumber}, forwarding to {Host}",
             lockerNumber,
             config.CurrentValue.Host);
 
+        var request = new LockerUnlockRequest(10, config.CurrentValue.SerialPorts);
+
+        var json = JsonSerializer.Serialize(request);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
         var response = await httpClient.PostAsync(
             new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"),
-            null);
+            content,
+            cancellationToken);
 
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         logger.LogInformation(
             "Response from locker {LockerNumber} unlock request: {ResponseBody}",
@@ -105,11 +112,18 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
 app.MapGet("/lockers/status", async (
     int lockerNumber,
     HttpClient httpClient,
-    IOptionsMonitor<LockersConfig> config) =>
+    IOptionsMonitor<LockersConfig> config,
+    CancellationToken cancellationToken = default) =>
 {
-    var response = await httpClient.GetAsync(new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"));
+    var json = JsonSerializer.Serialize(config.CurrentValue.SerialPorts);
+    var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-    var body = await response.Content.ReadAsStringAsync();
+    var response = await httpClient.PostAsync(
+        new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"),
+        content,
+        cancellationToken);
+
+    var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
     var result = JsonSerializer.Deserialize<LockerStatusResponse>(body);
 
@@ -121,7 +135,8 @@ app.MapGet("/lockers/status", async (
 
 app.MapPost("projectors/{projectorId:int}/on", async (
     int projectorId,
-    IOptionsMonitor<ProjectorsConfig> projectors) =>
+    IOptionsMonitor<ProjectorsConfig> projectors,
+    CancellationToken cancellationToken = default) =>
 {
     var projectorData = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
     if (projectorData == null)
@@ -199,12 +214,12 @@ app.MapGet("/projectors/status", async (IOptionsMonitor<ProjectorsConfig> projec
 
 var configPath = Path.GetFullPath("config.json");
 
-app.MapGet("/config", async () =>
+app.MapGet("/config", async (CancellationToken cancellationToken = default) =>
 {
     if (!File.Exists(configPath))
         return Results.NotFound("config.json not found.");
 
-    var json = await File.ReadAllTextAsync(configPath);
+    var json = await File.ReadAllTextAsync(configPath, cancellationToken);
     var config = JsonSerializer.Deserialize<RootConfig>(json, new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = false
@@ -213,7 +228,7 @@ app.MapGet("/config", async () =>
     return Results.Ok(config);
 });
 
-app.MapPost("/config", async (RootConfig updatedConfig) =>
+app.MapPost("/config", async (RootConfig updatedConfig, CancellationToken cancellationToken = default) =>
 {
     var json = JsonSerializer.Serialize(updatedConfig, new JsonSerializerOptions
     {
@@ -221,10 +236,14 @@ app.MapPost("/config", async (RootConfig updatedConfig) =>
         PropertyNameCaseInsensitive = false,
     });
 
-    await File.WriteAllTextAsync(configPath, json);
+    await File.WriteAllTextAsync(configPath, json, cancellationToken);
 
     return Results.Ok(new { success = true });
 });
 
 
 await app.RunAsync();
+
+public record LockerUnlockRequest(
+    int Duration,
+    List<string> SerialPorts);
