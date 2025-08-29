@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO.Ports;
 using System.Text.Json.Serialization;
 
@@ -20,66 +21,80 @@ public class Command
 
 public record UnlockDuration(int Delay);
 
-public class PortController(
-    SerialPorts ports,
-    LockerStateCache cache)
+public class PortController(SerialPorts ports, LockerStateCache cache) : IDisposable
 {
-    /// <summary>
-    /// High-level Unlock method:
-    /// 1. Map locker → board/channel
-    /// 2. Send ON command and confirm
-    /// 3. Update cache
-    /// 4. Schedule relock job with Quartz
-    /// </summary>
-    public async Task<SerialCommandResult> Unlock(int lockerNumber, LockerUnlockRequest request)
+    private readonly ConcurrentDictionary<string, SerialPort> _portCache = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _portLocks = new();
+
+    private SerialPort GetOrCreatePort(string portPath)
+    {
+        return _portCache.GetOrAdd(portPath, path =>
+        {
+            var sp = new SerialPort(path, 9600, Parity.None, 8, StopBits.One)
+            {
+                ReadTimeout = 1000,
+                WriteTimeout = 1000,
+                NewLine = "\r\n"
+            };
+
+            try
+            {
+                sp.Open();
+                Console.WriteLine($"✅ Opened serial port {path}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Failed to open {path}: {ex.Message}");
+                throw;
+            }
+
+            return sp;
+        });
+    }
+
+    private SemaphoreSlim GetLock(string portPath) =>
+        _portLocks.GetOrAdd(portPath, _ => new SemaphoreSlim(1, 1));
+
+    public async Task<SerialCommandResult> Unlock(int lockerNumber, LockerUnlockRequest request,
+        CancellationToken ct = default)
     {
         try
         {
             var relay = ports.GetRelay(lockerNumber, request.SerialPorts);
-            if (!File.Exists(relay.SerialPort))
-                return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
+            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: true, ct: ct);
 
-            // Try to send unlock
-            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: true);
-
-            // Always mark unlocked in cache (optimistic)
+            // Mark unlocked even if uncertain
             cache.MarkUnlocked(lockerNumber);
 
-            // Always schedule relock — even if relay didn’t confirm
+            // Schedule relock
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(request.Duration));
+                    await Task.Delay(TimeSpan.FromSeconds(request.Duration), ct);
 
-                    // Update cache back to locked
                     cache.MarkLocked(lockerNumber);
+                    var relockResult = await Lock(lockerNumber, request.SerialPorts, ct);
 
-                    // Attempt relock regardless of initial result
-                    var relockResult = await Lock(lockerNumber, request.SerialPorts);
-
-                    if (relockResult.Success)
-                    {
-                        Console.WriteLine(
-                            $"🔒 Automatically relocked locker {lockerNumber} after {request.Duration} seconds.");
-                    }
-                    else
-                    {
-                        Console.WriteLine(
-                            $"⚠️ Failed to relock locker {lockerNumber} after {request.Duration} seconds: {relockResult.Error}");
-                    }
+                    Console.WriteLine(relockResult.Success
+                        ? $"🔒 Relocked locker {lockerNumber} after {request.Duration}s"
+                        : $"⚠️ Failed to relock locker {lockerNumber}: {relockResult.Error}");
+                }
+                catch (TaskCanceledException)
+                {
+                    /* expected if request aborted */
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"⚠️ Relock task failed: {ex.Message}");
                 }
-            });
-
-            Console.WriteLine(result.Success
-                ? $"✅ Successfully unlocked locker {lockerNumber} on {relay.SerialPort}"
-                : $"⚠️ Unlock attempted but not confirmed for locker {lockerNumber} on {relay.SerialPort}");
+            }, ct);
 
             return result;
+        }
+        catch (OperationCanceledException)
+        {
+            return new SerialCommandResult(false, Error: "Unlock canceled by request");
         }
         catch (Exception ex)
         {
@@ -87,30 +102,27 @@ public class PortController(
         }
     }
 
-
-    /// <summary>
-    /// High-level Lock method:
-    /// 1. Map locker → board/channel
-    /// 2. Send OFF command and confirm
-    /// 3. Update cache
-    /// </summary>
-    public async Task<SerialCommandResult> Lock(int lockerNumber, List<string> serialPorts)
+    public async Task<SerialCommandResult> Lock(
+        int lockerNumber,
+        List<string> serialPorts,
+        CancellationToken ct = default)
     {
         try
         {
             var relay = ports.GetRelay(lockerNumber, serialPorts);
-            if (!File.Exists(relay.SerialPort))
-                return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
+            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: false, ct: ct);
 
-            var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: false);
-
-            if (!result.Success)
-                return result;
-
-            cache.MarkLocked(lockerNumber);
-            Console.WriteLine($"✅ Relocked locker {lockerNumber} on {relay.SerialPort}");
+            if (result.Success)
+            {
+                cache.MarkLocked(lockerNumber);
+                Console.WriteLine($"✅ Relocked locker {lockerNumber} on {relay.SerialPort}");
+            }
 
             return result;
+        }
+        catch (OperationCanceledException)
+        {
+            return new SerialCommandResult(false, Error: "Lock canceled by request");
         }
         catch (Exception ex)
         {
@@ -118,103 +130,104 @@ public class PortController(
         }
     }
 
-    private async Task<SerialCommandResult> SendToSerialWithConfirmation(
+    public async Task<SerialCommandResult> SendToSerialWithConfirmation(
         string portPath,
         int channel,
         bool isUnlock,
         int responseDelayMs = 200,
-        int maxReadWindowMs = 1000)
+        int maxOperationMs = 2000,
+        CancellationToken ct = default)
     {
+        var sem = GetLock(portPath);
+        await sem.WaitAsync(ct);
+
         try
         {
             var command = ports.GetCommand(channel);
             if (command == null)
-                return new SerialCommandResult(false, Error: $"No command defined for channel {channel}.");
+                return new SerialCommandResult(false, Error: $"No command defined for channel {channel}");
 
             var cmd = (isUnlock ? command.On : command.Off)
                 .Replace("\\r", "\r")
                 .Replace("\\n", "\n");
 
-            using var serialPort = new SerialPort(portPath, 9600, Parity.None, 8, StopBits.One)
-            {
-                ReadTimeout = maxReadWindowMs,
-                WriteTimeout = 1000,
-                NewLine = "\r\n"
-            };
+            var port = GetOrCreatePort(portPath);
 
-            try
-            {
-                serialPort.Open();
-                serialPort.DiscardInBuffer();
-                serialPort.DiscardOutBuffer();
+            // Write with cancellation
+            await Task.Run(() => port.WriteLine(cmd), ct);
 
-                // Send command + flush newline
-                serialPort.WriteLine(cmd);
+            await Task.Delay(responseDelayMs, ct);
 
-                // Give device time to respond before we start reading
-                await Task.Delay(responseDelayMs);
+            using var opCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            opCts.CancelAfter(maxOperationMs);
 
-                // Collect all available bytes in the read window
-                var deadline = DateTime.UtcNow.AddMilliseconds(maxReadWindowMs);
-                string response = "";
+            var response = await ReadLineWithCancelAsync(port, opCts.Token);
 
-                while (DateTime.UtcNow < deadline)
-                {
-                    try
-                    {
-                        response += serialPort.ReadExisting();
-                    }
-                    catch (TimeoutException)
-                    {
-                        break; // nothing new, stop
-                    }
+            if (string.IsNullOrWhiteSpace(response))
+                return new SerialCommandResult(true, StatusResponse: "No response (assumed success)");
 
-                    if (!string.IsNullOrWhiteSpace(response))
-                        break; // got something, stop early
+            var normalized = response.Trim();
 
-                    await Task.Delay(50); // small poll delay
-                }
+            if (normalized.Contains("ERR", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("FAIL", StringComparison.OrdinalIgnoreCase))
+                return new SerialCommandResult(false, normalized, "Relay reported failure");
 
-                // --- Evaluate result ---
-                if (string.IsNullOrWhiteSpace(response))
-                {
-                    // Fail-safe: no response but assume command worked
-                    return new SerialCommandResult(true, StatusResponse: "No response (assumed success)");
-                }
+            if (normalized.Contains("OK", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("ON", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("OFF", StringComparison.OrdinalIgnoreCase))
+                return new SerialCommandResult(true, normalized);
 
-                var normalized = response.Trim();
-
-                // Detect explicit failure
-                if (normalized.Contains("ERR", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("FAIL", StringComparison.OrdinalIgnoreCase))
-                {
-                    return new SerialCommandResult(false, StatusResponse: normalized, Error: "Relay reported failure");
-                }
-
-                // Detect common positive replies
-                if (normalized.Contains("OK", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("ON", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("OFF", StringComparison.OrdinalIgnoreCase))
-                {
-                    return new SerialCommandResult(true, StatusResponse: normalized);
-                }
-
-                // If it’s something else, assume success but log mismatch
-                return new SerialCommandResult(
-                    true,
-                    StatusResponse: normalized,
-                    Error: "Unexpected response format, assumed success"
-                );
-            }
-            catch (Exception ex)
-            {
-                return new SerialCommandResult(false, Error: $"Serial error: {ex.Message}");
-            }
+            return new SerialCommandResult(true, normalized, "Unexpected response, assumed success");
+        }
+        catch (OperationCanceledException)
+        {
+            return new SerialCommandResult(false, Error: "Operation canceled due to timeout or request abort");
         }
         catch (Exception ex)
         {
-            return new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}");
+            return new SerialCommandResult(false, Error: $"Serial communication error: {ex.Message}");
+        }
+        finally
+        {
+            sem.Release();
+        }
+    }
+
+    private static async Task<string> ReadLineWithCancelAsync(SerialPort port, CancellationToken ct)
+    {
+        var task = Task.Run(() =>
+        {
+            try
+            {
+                return port.ReadLine();
+            }
+            catch (TimeoutException)
+            {
+                return string.Empty;
+            }
+        }, ct);
+
+        var completed = await Task.WhenAny(task, Task.Delay(Timeout.Infinite, ct));
+        if (completed == task)
+            return await task;
+
+        throw new OperationCanceledException(ct);
+    }
+
+    public void Dispose()
+    {
+        foreach (var kv in _portCache)
+        {
+            try
+            {
+                kv.Value.Dispose();
+                Console.WriteLine($"✅ Closed serial port {kv.Key}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Failed to close {kv.Key}: {ex.Message}");
+            }
         }
     }
 }
