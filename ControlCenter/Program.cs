@@ -84,11 +84,9 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
             lockerNumber,
             config.CurrentValue.Host);
 
-        var request = new LockerUnlockRequest(10, config.CurrentValue.SerialPorts);
-
         var response = await httpClient.PostAsJsonAsync(
             new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"),
-            request,
+            new LockerUnlockRequest(10, config.CurrentValue.SerialPorts),
             cancellationToken);
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -116,7 +114,6 @@ app.MapGet("/lockers/{lockerNumber}/status", async (
         new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/status"),
         config.CurrentValue.SerialPorts,
         cancellationToken);
-
 
     var body = await response.Content.ReadAsStringAsync(cancellationToken);
 

@@ -42,8 +42,8 @@ public class PortController(
             // Low-level confirmation
             var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: true);
 
-            if (!result.Success)
-                return result;
+            // if (!result.Success)
+            //     return result;
 
             // Update cache
             cache.MarkUnlocked(lockerNumber);
