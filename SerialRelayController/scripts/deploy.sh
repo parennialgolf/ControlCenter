@@ -36,27 +36,28 @@ echo "👤 Ensuring $TARGET_USER is in dialout and plugdev..."
 sudo usermod -a -G dialout "$TARGET_USER"
 sudo usermod -a -G plugdev "$TARGET_USER"
 
-# ────────── .NET SDK ──────────
-LATEST_DOTNET_VER=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
-    | grep -Po '"latest-sdk":\s*"\K[^"]+' | head -n1)
+# ────────── .NET RUNTIME ──────────
+LATEST_DOTNET_RUNTIME=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
+    | grep -Po '"latest-runtime":\s*"\K[^"]+' | head -n1)
 
-if ! command -v dotnet &>/dev/null || [[ "$(dotnet --version)" != "$LATEST_DOTNET_VER" ]]; then
-    echo "⬆️ Installing dotnet SDK $LATEST_DOTNET_VER"
+if ! command -v dotnet &>/dev/null || [[ "$(dotnet --list-runtimes | grep -c $LATEST_DOTNET_RUNTIME)" -eq 0 ]]; then
+    echo "⬆️ Installing ASP.NET Core Runtime $LATEST_DOTNET_RUNTIME"
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
-    sudo bash "$TMP_SCRIPT" --channel "$DOTNET_CHANNEL" --install-dir "$DOTNET_INSTALL_DIR" --quality ga
+    sudo bash "$TMP_SCRIPT" --channel "$DOTNET_CHANNEL" --runtime aspnetcore --install-dir "$DOTNET_INSTALL_DIR" --quality ga
     rm -f "$TMP_SCRIPT"
     sudo ln -sf "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
 fi
 
-echo "✅ dotnet SDK: $(dotnet --version)"
+echo "✅ dotnet runtimes installed:"
+dotnet --list-runtimes
 
-# ────────── BUILD & PUBLISH ──────────
-echo "🚀 Publishing SerialRelayController..."
-dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "publish"
-
-sudo mkdir -p "$PUBLISH_DIR"
-sudo cp -r publish/* "$PUBLISH_DIR/"
+# ────────── DEPLOY PUBLISH DIR ──────────
+# (Assumes you already copied publish/ folder from your dev box)
+if [[ ! -d "$PUBLISH_DIR" ]]; then
+    echo "❌ Publish directory missing at $PUBLISH_DIR"
+    exit 1
+fi
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
 # ────────── CONFIG CHECK ──────────
@@ -87,9 +88,6 @@ Restart=always
 RestartSec=5
 User=$TARGET_USER
 
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-
 Environment=SERIAL_RELAY_CONTROLLER_PORT=80
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
@@ -111,24 +109,3 @@ sudo systemctl status "$SERVICE_NAME" --no-pager
 echo ""
 echo "📜 Logs (last 50 lines):"
 sudo journalctl -u "$SERVICE_NAME" -n 50 --no-pager
-
-echo ""
-echo ""
-echo "====================================="
-echo "====================================="
-echo "===== 🚀 Deployment complete! ======="
-echo "====================================="
-echo "====================================="
-echo ""
-echo ""
-
-# ────────── ASK TO TAIL LOGS ──────────
-echo ""
-read -rp "Do you want to tail live logs? (y/n): " tail_logs
-if [[ "${tail_logs,,}" =~ ^y(es)?$ ]]; then
-    echo ""
-    echo "====================================="
-    echo "Tailing logs for $SERVICE_NAME (Ctrl+C to stop)"
-    echo "====================================="
-    sudo journalctl -fu "$SERVICE_NAME"
-fi
