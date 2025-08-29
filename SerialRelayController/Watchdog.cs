@@ -2,12 +2,10 @@ using System.Runtime.InteropServices;
 
 namespace SerialRelayController;
 
-public partial class SystemdWatchdog(PortController ports) : BackgroundService
+public class SystemdWatchdog(PortController ports) : BackgroundService
 {
-    [LibraryImport("libsystemd.so.0", EntryPoint = "sd_notify")]
-    [return: MarshalAs(UnmanagedType.I4)]
-    private static partial int sd_notify(int unsetEnv,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string state);
+    [DllImport("libsystemd.so.0", EntryPoint = "sd_notify", CharSet = CharSet.Ansi)]
+    private static extern int sd_notify(int unsetEnv, string state);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
