@@ -3,7 +3,7 @@ using SerialRelayController;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddTransient<PortController>();
+builder.Services.AddSingleton<PortController>();
 builder.Services.AddSingleton<LockerStateCache>();
 builder.Services.AddTransient<SerialPorts>();
 builder.Services.AddHostedService<ThreadPoolMonitor>();
