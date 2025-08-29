@@ -12,10 +12,17 @@ var app = builder.Build();
 app.MapPost("{lockerNumber:int}/unlock", async (
         int lockerNumber,
         LockerUnlockRequest request,
-        PortController relay) =>
+        PortController relay,
+        ILogger<Program> logger) =>
     {
         try
         {
+            logger.LogInformation(
+                "Locker number: {LockerNumber}, Duration: {RequestDuration}, Ports: {Join}",
+                lockerNumber,
+                request.Duration,
+                string.Join(", ", request.SerialPorts));
+
             var result = await relay.Unlock(lockerNumber, request);
 
             Console.WriteLine(result.Success
