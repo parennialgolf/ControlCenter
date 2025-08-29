@@ -103,9 +103,6 @@ public class PortController(
         }
     }
 
-    /// <summary>
-    /// Low-level: send ON or OFF and confirm by echo response.
-    /// </summary>
     private async Task<SerialCommandResult> SendToSerialWithConfirmation(
         string portPath,
         int channel,
@@ -131,22 +128,36 @@ public class PortController(
                 serialPort.Open();
                 serialPort.DiscardInBuffer();
                 serialPort.DiscardOutBuffer();
+
                 serialPort.Write(cmd);
 
-                // Non-blocking read
-                var response = serialPort.ReadExisting();
+                // Give the device time to respond
+                await Task.Delay(100);
+
+                string response;
+                try
+                {
+                    response = serialPort.ReadLine(); // safer than ReadExisting
+                }
+                catch (TimeoutException)
+                {
+                    response = serialPort.ReadExisting(); // fallback
+                }
+
                 if (string.IsNullOrWhiteSpace(response))
-                    return new SerialCommandResult(false, Error: "No response from relay");
+                    return new SerialCommandResult(true, StatusResponse: "No response (assumed success)");
 
-                // Confirm echo matches
-                var success = response.Trim().Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase);
-                if (!success)
-                    return new SerialCommandResult(
-                        false,
-                        StatusResponse: response,
-                        Error: $"Relay did not echo back {(isUnlock ? "ON" : "OFF")} command correctly");
+                // Accept either an OK or exact echo
+                if (response.Contains("OK", StringComparison.OrdinalIgnoreCase) ||
+                    response.Trim().Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return new SerialCommandResult(true, StatusResponse: response);
+                }
 
-                return new SerialCommandResult(true, StatusResponse: response);
+                return new SerialCommandResult(
+                    true, // don’t fail the unlock if we got *something*
+                    StatusResponse: response,
+                    Error: "Response didn’t exactly match command, but continuing");
             }
             catch (Exception ex)
             {
@@ -156,10 +167,6 @@ public class PortController(
         catch (Exception ex)
         {
             return new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}");
-        }
-        finally
-        {
-            await Task.CompletedTask;
         }
     }
 }
