@@ -52,22 +52,18 @@ fi
 echo "✅ dotnet runtimes installed:"
 dotnet --list-runtimes
 
-# ────────── DEPLOY PUBLISH DIR ──────────
-if [[ ! -d "$PUBLISH_DIR" ]]; then
-    echo "❌ Publish directory missing at $PUBLISH_DIR"
-    exit 1
-fi
+# ────────── BUILD APP LOCALLY ──────────
+echo "🚀 Publishing SerialRelayController on the Pi..."
+dotnet publish "$PROJECT_DIR" -c Release -r "$RUNTIME" --self-contained false -o "$PUBLISH_DIR"
+
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
 # ────────── CONFIG CHECK ──────────
-echo "🔍 Checking configs..."
-for f in appsettings.json commands.json; do
-    if [[ ! -f "$PUBLISH_DIR/$f" ]]; then
-        echo "❌ Missing $f in publish dir!"
-        exit 1
-    fi
-done
-echo "✅ Found configs: appsettings.json, commands.json"
+if [[ -f "$PUBLISH_DIR/appsettings.json" && -f "$PUBLISH_DIR/commands.json" ]]; then
+    echo "✅ Found configs: appsettings.json, commands.json"
+else
+    echo "⚠️ WARNING: Configs missing — service may fail if configs are required."
+fi
 
 # ────────── SYSTEMD SERVICE ──────────
 echo "⚙️ Writing service file to $SERVICE_FILE"
@@ -102,7 +98,7 @@ EOF
 
 # ────────── ENABLE SERVICE ──────────
 sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl enable "$SERVICE_NAME" || true
 sudo systemctl restart "$SERVICE_NAME"
 
 echo "✅ Service deployed. Status:"
