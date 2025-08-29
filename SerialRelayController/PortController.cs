@@ -39,24 +39,35 @@ public class PortController(
             if (!File.Exists(relay.SerialPort))
                 return new SerialCommandResult(false, Error: $"Port {relay.SerialPort} not found");
 
-            // Low-level confirmation
+            // Try to send unlock
             var result = await SendToSerialWithConfirmation(relay.SerialPort, relay.Channel, isUnlock: true);
 
-            // if (!result.Success)
-            //     return result;
-
-            // Update cache
+            // Always mark unlocked in cache (optimistic)
             cache.MarkUnlocked(lockerNumber);
 
+            // Always schedule relock — even if relay didn’t confirm
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await Task.Delay(TimeSpan.FromSeconds(request.Duration));
+
+                    // Update cache back to locked
                     cache.MarkLocked(lockerNumber);
-                    await Lock(lockerNumber, request.SerialPorts);
-                    Console.WriteLine(
-                        $"🔒 Automatically relocked locker {lockerNumber} after {request.Duration} seconds.");
+
+                    // Attempt relock regardless of initial result
+                    var relockResult = await Lock(lockerNumber, request.SerialPorts);
+
+                    if (relockResult.Success)
+                    {
+                        Console.WriteLine(
+                            $"🔒 Automatically relocked locker {lockerNumber} after {request.Duration} seconds.");
+                    }
+                    else
+                    {
+                        Console.WriteLine(
+                            $"⚠️ Failed to relock locker {lockerNumber} after {request.Duration} seconds: {relockResult.Error}");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -64,7 +75,10 @@ public class PortController(
                 }
             });
 
-            Console.WriteLine($"✅ Successfully unlocked locker {lockerNumber} on {relay.SerialPort}");
+            Console.WriteLine(result.Success
+                ? $"✅ Successfully unlocked locker {lockerNumber} on {relay.SerialPort}"
+                : $"⚠️ Unlock attempted but not confirmed for locker {lockerNumber} on {relay.SerialPort}");
+
             return result;
         }
         catch (Exception ex)
@@ -72,6 +86,7 @@ public class PortController(
             return new SerialCommandResult(false, Error: $"Unexpected error: {ex.Message}");
         }
     }
+
 
     /// <summary>
     /// High-level Lock method:
@@ -106,7 +121,9 @@ public class PortController(
     private async Task<SerialCommandResult> SendToSerialWithConfirmation(
         string portPath,
         int channel,
-        bool isUnlock)
+        bool isUnlock,
+        int responseDelayMs = 200,
+        int maxReadWindowMs = 1000)
     {
         try
         {
@@ -118,10 +135,12 @@ public class PortController(
                 .Replace("\\r", "\r")
                 .Replace("\\n", "\n");
 
-            using var serialPort = new SerialPort(portPath, 9600, Parity.None, 8, StopBits.One);
-            serialPort.ReadTimeout = 2000;
-            serialPort.WriteTimeout = 2000;
-            serialPort.NewLine = "\r\n";
+            using var serialPort = new SerialPort(portPath, 9600, Parity.None, 8, StopBits.One)
+            {
+                ReadTimeout = maxReadWindowMs,
+                WriteTimeout = 1000,
+                NewLine = "\r\n"
+            };
 
             try
             {
@@ -129,35 +148,64 @@ public class PortController(
                 serialPort.DiscardInBuffer();
                 serialPort.DiscardOutBuffer();
 
-                serialPort.Write(cmd);
+                // Send command + flush newline
+                serialPort.WriteLine(cmd);
 
-                // Give the device time to respond
-                await Task.Delay(100);
+                // Give device time to respond before we start reading
+                await Task.Delay(responseDelayMs);
 
-                string response;
-                try
+                // Collect all available bytes in the read window
+                var deadline = DateTime.UtcNow.AddMilliseconds(maxReadWindowMs);
+                string response = "";
+
+                while (DateTime.UtcNow < deadline)
                 {
-                    response = serialPort.ReadLine(); // safer than ReadExisting
-                }
-                catch (TimeoutException)
-                {
-                    response = serialPort.ReadExisting(); // fallback
+                    try
+                    {
+                        response += serialPort.ReadExisting();
+                    }
+                    catch (TimeoutException)
+                    {
+                        break; // nothing new, stop
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(response))
+                        break; // got something, stop early
+
+                    await Task.Delay(50); // small poll delay
                 }
 
+                // --- Evaluate result ---
                 if (string.IsNullOrWhiteSpace(response))
-                    return new SerialCommandResult(true, StatusResponse: "No response (assumed success)");
-
-                // Accept either an OK or exact echo
-                if (response.Contains("OK", StringComparison.OrdinalIgnoreCase) ||
-                    response.Trim().Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
-                    return new SerialCommandResult(true, StatusResponse: response);
+                    // Fail-safe: no response but assume command worked
+                    return new SerialCommandResult(true, StatusResponse: "No response (assumed success)");
                 }
 
+                var normalized = response.Trim();
+
+                // Detect explicit failure
+                if (normalized.Contains("ERR", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("FAIL", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new SerialCommandResult(false, StatusResponse: normalized, Error: "Relay reported failure");
+                }
+
+                // Detect common positive replies
+                if (normalized.Contains("OK", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("ON", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("OFF", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new SerialCommandResult(true, StatusResponse: normalized);
+                }
+
+                // If it’s something else, assume success but log mismatch
                 return new SerialCommandResult(
-                    true, // don’t fail the unlock if we got *something*
-                    StatusResponse: response,
-                    Error: "Response didn’t exactly match command, but continuing");
+                    true,
+                    StatusResponse: normalized,
+                    Error: "Unexpected response format, assumed success"
+                );
             }
             catch (Exception ex)
             {
