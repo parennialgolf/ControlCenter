@@ -8,6 +8,7 @@ builder.Services.AddSingleton<LockerStateCache>();
 builder.Services.AddTransient<SerialPorts>();
 builder.Services.AddHostedService<ThreadPoolMonitor>();
 builder.Services.AddHostedService<ResourceMonitor>();
+builder.Services.AddHostedService<SystemdWatchdog>();
 
 var app = builder.Build();
 

@@ -213,6 +213,13 @@ public sealed class PortController(SerialPorts ports, LockerStateCache cache) : 
             sem.Release();
         }
     }
+    
+    public IEnumerable<SerialPort> GetActivePorts()
+    {
+        // Defensive copy to avoid threading issues
+        return _portCache.Values.Where(p => p.IsOpen).ToList();
+    }
+
 
     private static async Task<string> ReadLineWithCancelAsync(SerialPort port, CancellationToken ct)
     {
