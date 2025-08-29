@@ -9,7 +9,7 @@ SYSTEMD_DIR="/etc/systemd/system"
 SERVICE_NAME="serialrelaycontroller.service"
 SERVICE_FILE="$SYSTEMD_DIR/$SERVICE_NAME"
 
-TARGET_USER="user"
+TARGET_USER="relayuser"
 TARGET_HOME="/home/$TARGET_USER"
 PROJECT_DIR="$TARGET_HOME/ControlCenter/SerialRelayController"
 PUBLISH_DIR="$PROJECT_DIR/publish"
@@ -36,11 +36,11 @@ echo "👤 Ensuring $TARGET_USER is in dialout and plugdev..."
 sudo usermod -a -G dialout "$TARGET_USER"
 sudo usermod -a -G plugdev "$TARGET_USER"
 
-# ────────── .NET RUNTIME ──────────
+# ────────── .NET RUNTIME ONLY ──────────
 LATEST_DOTNET_RUNTIME=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
     | grep -Po '"latest-runtime":\s*"\K[^"]+' | head -n1)
 
-if ! command -v dotnet &>/dev/null || [[ "$(dotnet --list-runtimes | grep -c $LATEST_DOTNET_RUNTIME)" -eq 0 ]]; then
+if ! command -v dotnet &>/dev/null || ! dotnet --list-runtimes | grep -q "Microsoft.NETCore.App $LATEST_DOTNET_RUNTIME"; then
     echo "⬆️ Installing ASP.NET Core Runtime $LATEST_DOTNET_RUNTIME"
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
@@ -53,7 +53,6 @@ echo "✅ dotnet runtimes installed:"
 dotnet --list-runtimes
 
 # ────────── DEPLOY PUBLISH DIR ──────────
-# (Assumes you already copied publish/ folder from your dev box)
 if [[ ! -d "$PUBLISH_DIR" ]]; then
     echo "❌ Publish directory missing at $PUBLISH_DIR"
     exit 1
@@ -70,8 +69,6 @@ for f in appsettings.json commands.json; do
 done
 echo "✅ Found configs: appsettings.json, commands.json"
 
-grep -A5 SerialPortOptions "$PUBLISH_DIR/appsettings.json" || echo "⚠️ No SerialPortOptions section found!"
-
 # ────────── SYSTEMD SERVICE ──────────
 echo "⚙️ Writing service file to $SERVICE_FILE"
 
@@ -87,6 +84,10 @@ ExecStart=/usr/local/bin/dotnet $PUBLISH_DIR/SerialRelayController.dll
 Restart=always
 RestartSec=5
 User=$TARGET_USER
+
+# Allow non-root user to bind to port 80 safely
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 Environment=SERIAL_RELAY_CONTROLLER_PORT=80
 Environment=ASPNETCORE_ENVIRONMENT=Production
