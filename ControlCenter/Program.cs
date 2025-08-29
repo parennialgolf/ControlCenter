@@ -112,13 +112,11 @@ app.MapGet("/lockers/{lockerNumber}/status", async (
     IOptionsMonitor<LockersConfig> config,
     CancellationToken cancellationToken = default) =>
 {
-    var json = JsonSerializer.Serialize(config.CurrentValue.SerialPorts);
-    var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-    var response = await httpClient.PostAsync(
+    var response = await httpClient.PostAsJsonAsync(
         new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/status"),
-        content,
+        config.CurrentValue.SerialPorts,
         cancellationToken);
+
 
     var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
