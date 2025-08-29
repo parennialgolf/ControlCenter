@@ -106,8 +106,8 @@ app.MapPost("/lockers/{lockerNumber:int}/unlock", async (
     })
     .WithName("UnlockLocker");
 
-app.MapGet("/lockers/status", async (
-    int lockerNumber,
+app.MapGet("/lockers/{lockerNumber}/status", async (
+    string lockerNumber,
     HttpClient httpClient,
     IOptionsMonitor<LockersConfig> config,
     CancellationToken cancellationToken = default) =>
@@ -116,7 +116,7 @@ app.MapGet("/lockers/status", async (
     var content = new StringContent(json, Encoding.UTF8, "application/json");
 
     var response = await httpClient.PostAsync(
-        new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/unlock"),
+        new Uri($"http://{config.CurrentValue.Host}/{lockerNumber}/status"),
         content,
         cancellationToken);
 
