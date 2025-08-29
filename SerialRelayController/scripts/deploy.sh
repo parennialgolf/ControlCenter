@@ -36,21 +36,20 @@ echo "👤 Ensuring $TARGET_USER is in dialout and plugdev..."
 sudo usermod -a -G dialout "$TARGET_USER"
 sudo usermod -a -G plugdev "$TARGET_USER"
 
-# ────────── .NET RUNTIME ONLY ──────────
-LATEST_DOTNET_RUNTIME=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
-    | grep -Po '"latest-runtime":\s*"\K[^"]+' | head -n1)
+# ────────── .NET SDK (for build on Pi) ──────────
+LATEST_DOTNET_SDK=$(curl -sSL "https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/${DOTNET_CHANNEL}/releases.json" \
+    | grep -Po '"latest-sdk":\s*"\K[^"]+' | head -n1)
 
-if ! command -v dotnet &>/dev/null || ! dotnet --list-runtimes | grep -q "Microsoft.NETCore.App $LATEST_DOTNET_RUNTIME"; then
-    echo "⬆️ Installing ASP.NET Core Runtime $LATEST_DOTNET_RUNTIME"
+if ! command -v dotnet &>/dev/null || [[ "$(dotnet --version)" != "$LATEST_DOTNET_SDK" ]]; then
+    echo "⬆️ Installing .NET SDK $LATEST_DOTNET_SDK"
     TMP_SCRIPT="$(mktemp)"
     curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
-    sudo bash "$TMP_SCRIPT" --channel "$DOTNET_CHANNEL" --runtime aspnetcore --install-dir "$DOTNET_INSTALL_DIR" --quality ga
+    sudo bash "$TMP_SCRIPT" --channel "$DOTNET_CHANNEL" --install-dir "$DOTNET_INSTALL_DIR" --quality ga
     rm -f "$TMP_SCRIPT"
     sudo ln -sf "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
 fi
 
-echo "✅ dotnet runtimes installed:"
-dotnet --list-runtimes
+echo "✅ dotnet SDK installed: $(dotnet --version)"
 
 # ────────── BUILD APP LOCALLY ──────────
 echo "🚀 Publishing SerialRelayController on the Pi..."
