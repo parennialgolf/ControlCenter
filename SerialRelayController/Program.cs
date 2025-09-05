@@ -1,5 +1,8 @@
 using System.Text.Json.Serialization;
+using Quartz;
+using Quartz.AspNetCore;
 using SerialRelayController;
+using SerialRelayController.Jobs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,21 +12,38 @@ builder.Services.AddTransient<SerialPorts>();
 builder.Services.AddHostedService<ThreadPoolMonitor>();
 builder.Services.AddHostedService<ResourceMonitor>();
 
+builder.Services.AddQuartz(q =>
+{
+    q.UseInMemoryStore();
+    q
+        .AddJob<LockJob>(j => j
+            .StoreDurably()
+            .WithIdentity(LockJob.JobKey)
+            .WithDescription(LockJob.Description)
+            .Build())
+        .AddTrigger(t => t
+            .ForJob(LockJob.JobKey)
+            .WithIdentity(LockJob.TriggerKey)
+            .WithSchedule(LockJob.Schedule)
+            .StartNow());
+});
+
+builder.Services.AddQuartzServer(options =>
+{
+    options.WaitForJobsToComplete = true;
+});
+
 var app = builder.Build();
 
 app.MapPost("{lockerNumber:int}/unlock", async (
         int lockerNumber,
         LockerUnlockRequest request,
-        PortController relay,
-        ILogger<Program> logger) =>
+        PortController relay) =>
     {
         try
         {
-            logger.LogInformation(
-                "Locker number: {LockerNumber}, Duration: {RequestDuration}, Ports: {Join}",
-                lockerNumber,
-                request.Duration,
-                string.Join(", ", request.SerialPorts));
+            Console.WriteLine(
+                $"Locker number: {lockerNumber}, Duration: {request.Duration}, Ports: {string.Join(", ", request.SerialPorts)}");
 
             var result = await relay.Unlock(lockerNumber, request);
 

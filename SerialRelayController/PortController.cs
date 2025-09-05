@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.Ports;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace SerialRelayController;
@@ -174,8 +175,12 @@ public sealed class PortController(SerialPorts ports, LockerStateCache cache) : 
 
             var port = GetOrCreatePort(portPath);
 
-            // Write with cancellation
-            await Task.Run(() => port.WriteLine(cmd), ct);
+            var bytes = Encoding.ASCII.GetBytes(cmd);
+            Console.WriteLine(
+                $"→ [{(isUnlock ? "UNLOCK" : "LOCK")}] {portPath} sending {bytes.Length} bytes: {BitConverter.ToString(bytes)}");
+
+            // Write exact bytes — no extra CRLF
+            port.Write(bytes, 0, bytes.Length);
 
             await Task.Delay(responseDelayMs, ct);
 
@@ -183,29 +188,26 @@ public sealed class PortController(SerialPorts ports, LockerStateCache cache) : 
             opCts.CancelAfter(maxOperationMs);
 
             var response = await ReadLineWithCancelAsync(port, opCts.Token);
+            var normalized = response?.Trim() ?? string.Empty;
 
-            if (string.IsNullOrWhiteSpace(response))
-                return new SerialCommandResult(true, StatusResponse: "No response (assumed success)");
+            Console.WriteLine($"← Response from {portPath}: [{normalized}]");
 
-            var normalized = response.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+                return new SerialCommandResult(false, normalized, "No response from relay");
+
+            // SainSmart echoes the exact command back
+            if (normalized.Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase))
+                return new SerialCommandResult(true, normalized);
 
             if (normalized.Contains("ERR", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("FAIL", StringComparison.OrdinalIgnoreCase))
                 return new SerialCommandResult(false, normalized, "Relay reported failure");
 
-            if (normalized.Contains("OK", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals(cmd.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("ON", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("OFF", StringComparison.OrdinalIgnoreCase))
-                return new SerialCommandResult(true, normalized);
-
-            return new SerialCommandResult(true, normalized, "Unexpected response, assumed success");
+            return new SerialCommandResult(false, normalized, "Unexpected response from relay");
         }
         catch (Exception ex)
         {
-            // If the port died (unplug/replug), purge it so next call recreates
             _portCache.TryRemove(portPath, out _);
-
             return new SerialCommandResult(false, Error: $"Serial communication error: {ex.Message}");
         }
         finally
@@ -213,7 +215,8 @@ public sealed class PortController(SerialPorts ports, LockerStateCache cache) : 
             sem.Release();
         }
     }
-    
+
+
     public IEnumerable<SerialPort> GetActivePorts()
     {
         // Defensive copy to avoid threading issues
