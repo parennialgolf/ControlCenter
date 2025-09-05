@@ -15,17 +15,17 @@ builder.Services.AddHostedService<ResourceMonitor>();
 builder.Services.AddQuartz(q =>
 {
     q.UseInMemoryStore();
-    q
-        .AddJob<LockJob>(j => j
-            .StoreDurably()
-            .WithIdentity(LockJob.JobKey)
-            .WithDescription(LockJob.Description)
-            .Build())
-        .AddTrigger(t => t
-            .ForJob(LockJob.JobKey)
-            .WithIdentity(LockJob.TriggerKey)
-            .WithSchedule(LockJob.Schedule)
-            .StartNow());
+    // q
+    //     .AddJob<LockJob>(j => j
+    //         .StoreDurably()
+    //         .WithIdentity(LockJob.JobKey)
+    //         .WithDescription(LockJob.Description)
+    //         .Build())
+    //     .AddTrigger(t => t
+    //         .ForJob(LockJob.JobKey)
+    //         .WithIdentity(LockJob.TriggerKey)
+    //         .WithSchedule(LockJob.Schedule)
+    //         .StartNow());
 });
 
 builder.Services.AddQuartzServer(options =>
