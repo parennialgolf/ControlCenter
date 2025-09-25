@@ -188,7 +188,7 @@ Environment=SERIAL_RELAY_CONTROLLER_HOST=$LOCKER_HOST
 Environment=USE_LEGACY_LOCKER_API=true
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
-Environment=ASPNETCORE_URLS=http://0.0.0.0:8080
+Environment=ASPNETCORE_URLS=http://0.0.0.0:80
 
 SyslogIdentifier=controlcenter
 
