@@ -15,6 +15,7 @@ TARGET_USER="user"
 TARGET_HOME="/home/$TARGET_USER"
 PROJECT_DIR="$TARGET_HOME/ControlCenter/ControlCenter"
 PUBLISH_DIR="$PROJECT_DIR/publish"
+ARTIFACTS_DIR="$PROJECT_DIR/artifacts"
 CONFIG_FILE="$PROJECT_DIR/config.json"
 
 ARCH=$(uname -m)
@@ -88,7 +89,11 @@ echo "====================================="
 echo "Publishing ControlCenter"
 echo "====================================="
 
-dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "publish"
+# Clean artifacts folder first
+rm -rf "$ARTIFACTS_DIR"
+mkdir -p "$ARTIFACTS_DIR"
+
+dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "$ARTIFACTS_DIR"
 
 # ────────── COPY TO TARGET DIRECTORY ──────────
 echo ""
@@ -97,7 +102,7 @@ echo "Copying files to $PUBLISH_DIR"
 echo "====================================="
 
 sudo mkdir -p "$PUBLISH_DIR"
-sudo cp -r publish/* "$PUBLISH_DIR/"
+sudo rsync -a --delete "$ARTIFACTS_DIR/" "$PUBLISH_DIR/"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
 # ────────── CONFIG FILE ──────────
@@ -183,7 +188,7 @@ Environment=SERIAL_RELAY_CONTROLLER_HOST=$LOCKER_HOST
 Environment=USE_LEGACY_LOCKER_API=true
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
-Environment=ASPNETCORE_URLS=http://0.0.0.0:80
+Environment=ASPNETCORE_URLS=http://0.0.0.0:8080
 
 SyslogIdentifier=controlcenter
 
