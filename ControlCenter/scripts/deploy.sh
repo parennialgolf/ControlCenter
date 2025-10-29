@@ -115,11 +115,16 @@ sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 # ────────── CONFIG FILE ──────────
 echo ""
 echo "====================================="
-echo "Ensuring config.json exists"
+echo "Checking for existing config.json"
 echo "====================================="
 
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "⚠️ config.json not found, creating default…"
+if [[ -f "$CONFIG_FILE" ]]; then
+    echo "✅ config.json already exists at $CONFIG_FILE"
+    echo "   Skipping creation to preserve existing configuration."
+else
+    echo "⚠️ No config.json found — creating default config…"
+    sudo mkdir -p "$(dirname "$CONFIG_FILE")"
+
     cat <<'EOF' | sudo tee "$CONFIG_FILE" >/dev/null
 {
   "Doors": {
@@ -131,24 +136,9 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     "Managed": true,
     "Max": 0,
     "Projectors": [
-      {
-        "Id": 1,
-        "Name": "Bay 1",
-        "IpAddress": "10.1.10.182",
-        "Protocol": "PJLink"
-      },
-      {
-        "Id": 2,
-        "Name": "Bay 2",
-        "IpAddress": "10.1.10.138",
-        "Protocol": "PJLink"
-      },
-      {
-        "Id": 3,
-        "Name": "Bay 3",
-        "IpAddress": "10.1.10.57",
-        "Protocol": "PJLink"
-      }
+      { "Id": 1, "Name": "Bay 1", "IpAddress": "10.1.10.182", "Protocol": "PJLink" },
+      { "Id": 2, "Name": "Bay 2", "IpAddress": "10.1.10.138", "Protocol": "PJLink" },
+      { "Id": 3, "Name": "Bay 3", "IpAddress": "10.1.10.57", "Protocol": "PJLink" }
     ]
   },
   "Lockers": {
@@ -164,10 +154,9 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   }
 }
 EOF
+
     sudo chown "$TARGET_USER:$TARGET_USER" "$CONFIG_FILE"
     echo "✅ Default config.json created at $CONFIG_FILE"
-else
-    echo "✅ config.json already exists"
 fi
 
 # ────────── WRITE SYSTEMD SERVICE FILE ──────────
