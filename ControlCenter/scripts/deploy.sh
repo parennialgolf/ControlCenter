@@ -64,21 +64,29 @@ fi
 
 echo "ℹ️ Latest $DOTNET_CHANNEL SDK available: $LATEST_DOTNET_VER"
 
+# Prompt for update if versions differ
 if [[ "$INSTALLED_DOTNET_VER" != "$LATEST_DOTNET_VER" ]]; then
-    echo "⬆️ Installing/updating dotnet SDK to $LATEST_DOTNET_VER"
-    TMP_SCRIPT="$(mktemp)"
-    curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
-    sudo bash "$TMP_SCRIPT" \
-        --channel "$DOTNET_CHANNEL" \
-        --install-dir "$DOTNET_INSTALL_DIR" \
-        --quality ga
-    rm -f "$TMP_SCRIPT"
+    echo ""
+    echo "A newer .NET SDK version ($LATEST_DOTNET_VER) is available."
+    read -rp "Do you want to download and install the latest version? (y/n): " update_dotnet
+    if [[ "${update_dotnet,,}" =~ ^y(es)?$ ]]; then
+        echo "⬆️ Installing/updating dotnet SDK to $LATEST_DOTNET_VER"
+        TMP_SCRIPT="$(mktemp)"
+        curl -sSL https://dot.net/v1/dotnet-install.sh -o "$TMP_SCRIPT"
+        sudo bash "$TMP_SCRIPT" \
+            --channel "$DOTNET_CHANNEL" \
+            --install-dir "$DOTNET_INSTALL_DIR" \
+            --quality ga
+        rm -f "$TMP_SCRIPT"
 
-    if [[ ! -L /usr/local/bin/dotnet ]]; then
-        sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
+        if [[ ! -L /usr/local/bin/dotnet ]]; then
+            sudo ln -s "$DOTNET_INSTALL_DIR/dotnet" /usr/local/bin/dotnet
+        fi
+
+        echo "✅ dotnet installed/updated: $(dotnet --version)"
+    else
+        echo "⏭️ Skipping .NET SDK update, continuing with current version..."
     fi
-
-    echo "✅ dotnet installed/updated: $(dotnet --version)"
 else
     echo "✅ dotnet is already up to date ($INSTALLED_DOTNET_VER)"
 fi
@@ -89,7 +97,6 @@ echo "====================================="
 echo "Publishing ControlCenter"
 echo "====================================="
 
-# Clean artifacts folder first
 rm -rf "$ARTIFACTS_DIR"
 mkdir -p "$ARTIFACTS_DIR"
 
@@ -145,6 +152,7 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     ]
   },
   "Lockers": {
+    "LegacyEnabled": true,
     "Host": "pgl-1-lockers",
     "Managed": true,
     "Max": 34,
@@ -183,7 +191,6 @@ RestartSec=5
 User=$TARGET_USER
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
-# Environment variables
 Environment=SERIAL_RELAY_CONTROLLER_HOST=$LOCKER_HOST
 Environment=USE_LEGACY_LOCKER_API=true
 Environment=ASPNETCORE_ENVIRONMENT=Production
