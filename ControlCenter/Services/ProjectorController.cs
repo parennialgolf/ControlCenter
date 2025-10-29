@@ -24,7 +24,9 @@ public class ProjectorControlService(IPAddress ip, IProjectorProtocol protocol) 
     {
         var result = await SendCommandAsync(protocol.On, expectResponse: true);
         if (!result.WasSent)
-            return ProjectorCommandResult.FailureResult(ip, "Failed to send power ON command.",
+            return ProjectorCommandResult.FailureResult(
+                ip,
+                "Failed to send power ON command.",
                 result.Error ?? "Unknown error");
 
         var response = result.Response ?? string.Empty;

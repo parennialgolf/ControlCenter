@@ -182,6 +182,34 @@ app.MapPost("projectors/{projectorId:int}/off", async (int projectorId, IOptions
         : Results.BadRequest(result);
 });
 
+app.MapGet("/projectors/{projectorId:int}/status",
+    async (int projectorId,
+        IOptionsMonitor<ProjectorsConfig> projectors) =>
+    {
+        var projector = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
+
+        if (projector is null)
+            return Results.NotFound(new
+            {
+                Success = false,
+                Message = "No projector found with the given ID",
+                ProjectorId = projectorId
+            });
+
+        var controller = ProjectorControlFactory.Create(
+            IPAddress.Parse(projector.IpAddress),
+            projector.Protocol);
+
+        var result = await controller.GetStatusAsync();
+
+        return Results.Ok(new
+        {
+            Success = true,
+            ProjectorId = projectorId,
+            Projector = result,
+        });
+    });
+
 app.MapGet("/projectors/status", async (IOptionsMonitor<ProjectorsConfig> projectors) =>
 {
     var tasks = projectors.CurrentValue.Projectors
