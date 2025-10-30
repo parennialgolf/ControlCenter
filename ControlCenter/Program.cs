@@ -1,13 +1,9 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ControlCenter;
 using ControlCenter.Models;
 using ControlCenter.Services;
 using Microsoft.Extensions.Options;
-using Shared;
-using Shared.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -131,10 +127,7 @@ app.MapPost("projectors/{projectorId:int}/on", async (
     CancellationToken cancellationToken = default) =>
 {
     var projectorData = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
-    if (projectorData == null)
-    {
-        return Results.NotFound();
-    }
+    if (projectorData == null) return Results.NotFound();
 
     var ipAddress = IPAddress.Parse(projectorData.IpAddress);
     var projector = ProjectorControlFactory.Create(
@@ -144,24 +137,19 @@ app.MapPost("projectors/{projectorId:int}/on", async (
     var status = await projector.GetStatusAsync();
 
     if (status.Status == ProjectorStatusType.On)
-    {
-        return Results.Ok(status);
-    }
+        return Results.Ok(new ProjectorStatusResult(true, status.Status, status.Message));
 
     var result = await projector.OnAsync();
 
     return result.Success
-        ? Results.Ok(result)
-        : Results.BadRequest(result);
+        ? Results.Ok(new ProjectorStatusResult(true, result.Status, result.Message))
+        : Results.BadRequest(new ProjectorStatusResult(false, result.Status, result.Message));
 });
 
 app.MapPost("projectors/{projectorId:int}/off", async (int projectorId, IOptionsMonitor<ProjectorsConfig> projectors) =>
 {
     var projectorData = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
-    if (projectorData == null)
-    {
-        return Results.NotFound();
-    }
+    if (projectorData == null) return Results.NotFound();
 
     var ipAddress = IPAddress.Parse(projectorData.IpAddress);
     var projector = ProjectorControlFactory.Create(
@@ -171,15 +159,13 @@ app.MapPost("projectors/{projectorId:int}/off", async (int projectorId, IOptions
     var status = await projector.GetStatusAsync();
 
     if (status.Status == ProjectorStatusType.Off)
-    {
-        return Results.Ok(status);
-    }
+        return Results.Ok(new ProjectorStatusResult(true, status.Status, status.Message));
 
     var result = await projector.OffAsync();
 
     return result.Success
-        ? Results.Ok(result)
-        : Results.BadRequest(result);
+        ? Results.Ok(new ProjectorStatusResult(true, result.Status, result.Message))
+        : Results.BadRequest(new ProjectorStatusResult(false, result.Status, result.Message));
 });
 
 app.MapGet("/projectors/{projectorId:int}/status",
@@ -189,12 +175,10 @@ app.MapGet("/projectors/{projectorId:int}/status",
         var projector = projectors.CurrentValue.Projectors.FirstOrDefault(p => p.Id == projectorId);
 
         if (projector is null)
-            return Results.NotFound(new
-            {
-                Success = false,
-                Message = "No projector found with the given ID",
-                ProjectorId = projectorId
-            });
+            return Results.Ok(new ProjectorStatusResult(
+                false,
+                ProjectorStatusType.Unknown,
+                "No projector found with the given ID"));
 
         var controller = ProjectorControlFactory.Create(
             IPAddress.Parse(projector.IpAddress),
@@ -202,12 +186,7 @@ app.MapGet("/projectors/{projectorId:int}/status",
 
         var result = await controller.GetStatusAsync();
 
-        return Results.Ok(new
-        {
-            Success = true,
-            ProjectorId = projectorId,
-            Projector = result,
-        });
+        return Results.Ok(new ProjectorStatusResult(true, result.Status, result.Message));
     });
 
 app.MapGet("/projectors/status", async (IOptionsMonitor<ProjectorsConfig> projectors) =>
@@ -225,11 +204,11 @@ app.MapGet("/projectors/status", async (IOptionsMonitor<ProjectorsConfig> projec
 
     var statusResults = await Task.WhenAll(tasks);
 
-    return Results.Ok(new
-    {
-        Success = true,
-        Projectors = statusResults
-    });
+    return Results.Ok(new ProjectorStatusResultList(
+        true,
+        statusResults
+            .Select(r => new ProjectorStatusResult(r.Success, r.Status, r.Message))
+            .ToList()));
 });
 
 var configPath = Path.GetFullPath("config.json");
@@ -264,6 +243,15 @@ app.MapPost("/config", async (RootConfig updatedConfig, CancellationToken cancel
 
 await app.RunAsync();
 
-public record LockerUnlockRequest(
+internal record LockerUnlockRequest(
     int Duration,
     List<string> SerialPorts);
+
+internal record ProjectorStatusResult(
+    bool Success,
+    ProjectorStatusType Status,
+    string? Message);
+
+internal record ProjectorStatusResultList(
+    bool Success,
+    List<ProjectorStatusResult> Results);

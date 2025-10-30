@@ -25,13 +25,13 @@ public class ProjectorCommandResult
     public IPAddress IpAddress { get; init; } = null!;
     public bool Success { get; init; }
     public string? Message { get; init; }
-    public ProjectorStatusType? Status { get; init; }
+    public ProjectorStatusType Status { get; init; }
     public string? RawResponse { get; init; }
 
     public static ProjectorCommandResult SuccessResult(
         IPAddress ipAddress,
         string message,
-        ProjectorStatusType? status = null,
+        ProjectorStatusType status,
         string? rawResponse = null)
         => new()
         {
