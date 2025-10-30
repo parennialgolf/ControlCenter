@@ -208,7 +208,8 @@ app.MapGet("/projectors/status", async (IOptionsMonitor<ProjectorsConfig> projec
         true,
         statusResults
             .Select(r => new ProjectorStatusResult(r.Success, r.Status, r.Message))
-            .ToList()));
+            .ToList(),
+        "Gathered all statuses"));
 });
 
 var configPath = Path.GetFullPath("config.json");
@@ -254,4 +255,5 @@ internal record ProjectorStatusResult(
 
 internal record ProjectorStatusResultList(
     bool Success,
-    List<ProjectorStatusResult> Results);
+    List<ProjectorStatusResult> Results,
+    string? Message);
