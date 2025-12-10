@@ -115,7 +115,7 @@ echo "Copying files to $PUBLISH_DIR"
 echo "====================================="
 
 sudo mkdir -p "$PUBLISH_DIR"
-# IMPORTANT: do NOT touch config.json
+# do NOT touch config.json on redeploy
 sudo rsync -a --delete --exclude 'config.json' "$ARTIFACTS_DIR/" "$PUBLISH_DIR/"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
@@ -170,7 +170,7 @@ fi
 echo ""
 echo "====================================="
 echo "Deploying service file to $SERVICE_FILE"
-echo "=====================================""
+echo "====================================="
 
 sudo tee "$SERVICE_FILE" >/dev/null <<EOF
 [Unit]
