@@ -16,7 +16,7 @@ TARGET_HOME="/home/$TARGET_USER"
 PROJECT_DIR="$TARGET_HOME/ControlCenter/ControlCenter"
 PUBLISH_DIR="$PROJECT_DIR/publish"
 ARTIFACTS_DIR="$PROJECT_DIR/artifacts"
-CONFIG_FILE="$PROJECT_DIR/config.json"
+CONFIG_FILE="$PUBLISH_DIR/config.json"
 
 ARCH=$(uname -m)
 
@@ -100,7 +100,13 @@ echo "====================================="
 rm -rf "$ARTIFACTS_DIR"
 mkdir -p "$ARTIFACTS_DIR"
 
-dotnet publish -c Release -r "$RUNTIME" --self-contained false -o "$ARTIFACTS_DIR"
+pushd "$PROJECT_DIR" >/dev/null
+dotnet publish ControlCenter.csproj \
+  -c Release \
+  -r "$RUNTIME" \
+  --self-contained false \
+  -o "$ARTIFACTS_DIR"
+popd >/dev/null
 
 # ────────── COPY TO TARGET DIRECTORY ──────────
 echo ""
@@ -109,7 +115,8 @@ echo "Copying files to $PUBLISH_DIR"
 echo "====================================="
 
 sudo mkdir -p "$PUBLISH_DIR"
-sudo rsync -a --delete "$ARTIFACTS_DIR/" "$PUBLISH_DIR/"
+# IMPORTANT: do NOT touch config.json
+sudo rsync -a --delete --exclude 'config.json' "$ARTIFACTS_DIR/" "$PUBLISH_DIR/"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 
 # ────────── CONFIG FILE ──────────
@@ -163,7 +170,7 @@ fi
 echo ""
 echo "====================================="
 echo "Deploying service file to $SERVICE_FILE"
-echo "====================================="
+echo "=====================================""
 
 sudo tee "$SERVICE_FILE" >/dev/null <<EOF
 [Unit]
